@@ -26,8 +26,7 @@ def create_charged_plate(lower_left_corner, upper_right_corner, value, bc_type, 
             ys[j + i * ysize] = j + lower_left_corner[1]
             values[j + i * ysize] = value
 
-    charged_plate = BoundaryCondition(bc_type, np.array([xs.astype(int), ys.astype(int)]),
-                                      static_values=values, neumann_direction=neumann_direction)
+    charged_plate = BoundaryCondition(bc_type, np.array([xs.astype(int), ys.astype(int)]), values, neumann_direction=neumann_direction)
 
     return charged_plate
 
@@ -50,7 +49,7 @@ def create_uniform_edge_boundary(num_x_nodes, num_y_nodes, side, bc_type, value,
         ys = np.zeros(num_x_nodes) + num_y_nodes - 1
         values = np.zeros(num_x_nodes) + value
 
-    edge_boundary = BoundaryCondition(bc_type, np.array([xs.astype(int), ys.astype(int)]), static_values=values, neumann_direction=neumann_direction)
+    edge_boundary = BoundaryCondition(bc_type, np.array([xs.astype(int), ys.astype(int)]), values, neumann_direction=neumann_direction)
 
     return edge_boundary
 
@@ -73,19 +72,18 @@ def create_dynamic_edge_boundary(num_x_nodes, num_y_nodes, side, bc_type, dynami
         ys = np.zeros(num_x_nodes) + num_y_nodes - 1
         values = dynamic_values_function(0)
 
-    edge_boundary = BoundaryCondition(bc_type, np.array([xs.astype(int), ys.astype(int)]),
-                                      dynamic_values_function=dynamic_values_function)
+    edge_boundary = BoundaryCondition(bc_type, np.array([xs.astype(int), ys.astype(int)]), dynamic_values_function)
 
     return edge_boundary
 
 
 # FUNCTIONS FOR TESTING DYNAMIC BOUNDARY CONDITIONS
 def cosinusoidal(t):
-    return np.zeros(100)+np.sin(t/10 + np.pi)*2
+    return np.zeros(100)+np.sin(t + np.pi)*2
 
 
 def sinusoidal(t):
-    return np.zeros(100)+np.sin(t/10)*2
+    return np.zeros(100)+np.sin(t)*2
 
 
 # ANIMATION
@@ -118,7 +116,7 @@ def animate_history(i):
 
 
 # SIMULATION SETTINGS
-num_time_steps = 20000  # num of time steps to simulate for
+num_time_steps = 2000  # num of time steps to simulate for
 animate_live = False  # animate simulation as it is running (VERY SLOW)
 animate_at_end = True  # animate simulation at end
 printout_interval = 500  # timesteps between printouts

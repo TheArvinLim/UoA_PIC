@@ -16,18 +16,17 @@ class BoundaryParticleInteraction(Enum):
 class BoundaryCondition:
 
     """Object that stores the type and value of a given boundary condition"""
-    def __init__(self, type, positions, static_values=None, dynamic_values_function=None, neumann_direction=None):
+    def __init__(self, type, positions, magnitude_function, neumann_direction=None):
         """
         :param type: The boundary condition type as a BoundaryTypes object
-        :param value: The value(s) of this boundary condition as a 1D array
-        :param static_values: node coordinates of this boundary
-        :param dynamic_values_function: node coordinates of this boundary
-        :param Neumann_direction: if type is Neumann, specify whether in x (0) or y (1) direction
+        :param positions: The position(s) of this boundary condition as a 1D array
+        :param magnitude_function: Magnitude(s) of the bc. Can be either float or function of time f(t)
+        :param neumann_direction: if type is Neumann, specify whether in x (0) or y (1) direction
         """
         self.positions = positions
         self.type = type
-        self.dynamic_values_function = dynamic_values_function
 
+        # check for direction of the neumann boundary
         if self.type == BoundaryTypes.NEUMANN:
             if neumann_direction is None:
                 raise ValueError('Please specify direction of Neumann boundary condition')
@@ -36,15 +35,15 @@ class BoundaryCondition:
             else:
                 self.neumann_direction = neumann_direction
 
-        if dynamic_values_function is not None:
-            self.values = dynamic_values_function(0)
-
-        elif static_values is not None:
-            self.values = static_values
-
+        # check whether a function of time, or just static
+        if callable(magnitude_function):
+            self.magnitude_function = magnitude_function
+            self.values = magnitude_function(0)
+            self.dynamic = True
         else:
-            raise ValueError('Value was not set for this boundary condition')
-
+            self.values = magnitude_function
+            self.dynamic = False
 
     def update(self, t):
-        self.values = self.dynamic_values_function(t)
+        """This function updates the magnitude of this boundary condition."""
+        self.values = self.magnitude_function(t)
