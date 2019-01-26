@@ -118,13 +118,14 @@ def animate_history(i):
 
 
 # SIMULATION SETTINGS
-num_time_steps = 10000  # num of time steps to simulate for
+num_time_steps = 20000  # num of time steps to simulate for
 animate_live = False  # animate simulation as it is running (VERY SLOW)
 animate_at_end = True  # animate simulation at end
 printout_interval = 500  # timesteps between printouts
 snapshot_interval = 10  # timesteps between snapshots
 eps_0 = 1
 delta_t = 0.01  # step size
+
 
 # INITIALISE PARTICLES
 def initialise_test():
@@ -135,7 +136,7 @@ def initialise_test():
     delta_y = 0.1  # grid resolution
     x_length = (num_x_nodes-1)*delta_x
     y_length = (num_y_nodes-1)*delta_y
-    num_particles = 10
+    num_particles = 100
 
     particle_positions = np.random.rand(2, num_particles)*[[x_length], [y_length]]
     particle_velocities = np.zeros((2, num_particles))
@@ -162,8 +163,8 @@ def initialise_test():
 
     particle_sources = []
 
-    #left_bc = create_uniform_edge_boundary(num_x_nodes, num_y_nodes, "LEFT", BoundaryTypes.DIRICHLET, 0)
-    #right_bc = create_uniform_edge_boundary(num_x_nodes, num_y_nodes, "RIGHT", BoundaryTypes.DIRICHLET, 0)
+    # left_bc = create_uniform_edge_boundary(num_x_nodes, num_y_nodes, "LEFT", BoundaryTypes.DIRICHLET, 0)
+    # right_bc = create_uniform_edge_boundary(num_x_nodes, num_y_nodes, "RIGHT", BoundaryTypes.DIRICHLET, 0)
     upper_bc = create_uniform_edge_boundary(num_x_nodes, num_y_nodes, "UPPER", BoundaryTypes.DIRICHLET, 0)
     lower_bc = create_uniform_edge_boundary(num_x_nodes, num_y_nodes, "LOWER", BoundaryTypes.DIRICHLET, 0)
 
@@ -194,15 +195,15 @@ energy_diagnostic = EnergyDiagnostic()
 # SET UP FIGURES
 fig = plt.figure(figsize=(6, 8))
 
-ax2 = fig.add_subplot(211)
-ax2.set_title("Densities")
-densities = ax2.imshow(np.zeros((particle_system.num_x_nodes, particle_system.num_y_nodes)), vmin=-200, vmax=200,
+ax1 = fig.add_subplot(211)
+ax1.set_title("Densities")
+densities = ax1.imshow(np.zeros((particle_system.num_x_nodes, particle_system.num_y_nodes)), vmin=-200, vmax=200,
                        interpolation="bicubic", origin="lower",
                        extent=[0, particle_system.x_length, 0, particle_system.y_length])
 
-ax3 = fig.add_subplot(212)
-ax3.set_title("Potential")
-potentials = ax3.imshow(np.zeros((particle_system.num_x_nodes, particle_system.num_y_nodes)), vmin=-3, vmax=3,
+ax2 = fig.add_subplot(212)
+ax2.set_title("Potential")
+potentials = ax2.imshow(np.zeros((particle_system.num_x_nodes, particle_system.num_y_nodes)), vmin=-3, vmax=3,
                         interpolation="bicubic", origin="lower",
                         extent=[0, particle_system.x_length, 0, particle_system.y_length])
 

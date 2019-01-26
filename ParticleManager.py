@@ -3,7 +3,7 @@ import time
 from BoundaryClasses import BoundaryParticleInteraction
 from PotentialSolver import PotentialSolver
 from Integrator import LeapfrogIntegrator
-
+import scipy.interpolate
 
 class ParticleManager:
     """Handles all particle / grid operations. Main simulation class."""
@@ -11,14 +11,14 @@ class ParticleManager:
                 delta_t, eps_0,
                 num_x_nodes, num_y_nodes, delta_x, delta_y,
                 boundary_conditions=[],
-                particle_sources = [],
+                particle_sources=[],
                 left_boundary_particle_interaction=BoundaryParticleInteraction.OPEN,
                 right_boundary_particle_interaction=BoundaryParticleInteraction.OPEN,
                 upper_boundary_particle_interaction=BoundaryParticleInteraction.OPEN,
                 lower_boundary_particle_interaction=BoundaryParticleInteraction.OPEN,
                 integration_method="LEAPFROG"):
         """
-        D = number of dimensions
+        D = number of dimensions (x = 0, y = 1)
         N = number of particles currently in system
         X = number of nodes in x direction
         Y = number of nodes in y direction
@@ -48,7 +48,7 @@ class ParticleManager:
         """
         self.start_time = time.time()
 
-        self.dimensions = 2  # This is a 2D PIC simulation
+        self.dimensions = 2  # This is a 2D PIC simulation, must remain 2 for now.
 
         self.dt = delta_t
         self.current_t_step = 0  # keeps track of how many timesteps in we are
@@ -57,6 +57,7 @@ class ParticleManager:
 
         # the following arrays store properties of particles
         self.particle_positions = particle_positions
+        self.floored_positions = np.zeros((self.dimensions, self.num_particles))
         self.particle_velocities = particle_velocities
         self.particle_masses = particle_masses
         self.particle_charges = particle_charges
@@ -70,6 +71,12 @@ class ParticleManager:
         self.delta_y = delta_y
         self.x_length = (self.num_x_nodes-1)*self.delta_x  # the total length of the system in x direction
         self.y_length = (self.num_y_nodes-1) * self.delta_y  # the total length of the system in y direction
+
+        # store particle node weightings
+        self.w1 = np.zeros(self.num_particles)
+        self.w2 = np.zeros(self.num_particles)
+        self.w3 = np.zeros(self.num_particles)
+        self.w4 = np.zeros(self.num_particles)
 
         # store the boundary conditions
         self.left_boundary_particle_interaction = left_boundary_particle_interaction
@@ -92,6 +99,7 @@ class ParticleManager:
             self.integrator = LeapfrogIntegrator()
 
             # push back initial velocities back half a time step
+            self.calculate_particle_node_weights()
             self.solve_grid_charge_densities()
             self.solve_grid_potentials()
             self.solve_grid_E()
@@ -101,35 +109,34 @@ class ParticleManager:
                                                                                 self.particle_forces,
                                                                                 self.particle_masses, self.dt)
 
+    def calculate_particle_node_weights(self):
+        """Calculates the weighting for each particle for each of the four nodes it is closest to. The weighting
+        is equivalent to the area of the square mode in the opposite corner of the node in question. The weighting
+        is used to distribute charge from the particles to the nodes and gather the E field felt by the particle from
+        the nodes."""
+        cell_length_distance = self.particle_positions / [[self.delta_x], [self.delta_y]]
+        self.floored_positions = np.floor(cell_length_distance).astype(int)
+        fractional_distance = (cell_length_distance - self.floored_positions)
+
+        # these weights are based on how close the particle is to that node.
+        self.w1 = (1 - fractional_distance[0, :]) * (1 - fractional_distance[1, :])  # bottom left
+        self.w2 = (fractional_distance[0, :]) * (1 - fractional_distance[1, :])  # bottom right
+        self.w3 = (1 - fractional_distance[0, :]) * (fractional_distance[1, :])  # top left
+        self.w4 = (fractional_distance[0, :]) * (fractional_distance[1, :])  # top right
+
     def solve_grid_charge_densities(self):
         """Updates the charge density at each node point. Distributes the charge of each particle between the
         four closest nodes, weighted by distance to that node."""
-
-        cell_length_distance = self.particle_positions / [[self.delta_x], [self.delta_y]]
-        floored_positions = np.floor(cell_length_distance).astype(int)
-        fractional_distance = (cell_length_distance - floored_positions)
-
-        # these weights are based on how close the particle is to that node.
-        w1 = (1 - fractional_distance[0, :]) * (1 - fractional_distance[1, :])  # bottom left
-        w2 = (fractional_distance[0, :]) * (1 - fractional_distance[1, :])  # bottom right
-        w3 = (1 - fractional_distance[0, :]) * (fractional_distance[1, :])  # top left
-        w4 = (fractional_distance[0, :]) * (fractional_distance[1, :])  # top right
-
         # setup array to store densities
         self.grid_charge_densities = np.zeros((self.num_x_nodes, self.num_y_nodes))
 
-        for i in range(self.num_particles):
-            floor_x = floored_positions[0, i]
-            floor_y = floored_positions[1, i]
-            particle_charge = self.particle_charges[i]
+        # distribute weighted charges of each particle to corresponding node corners
+        self.grid_charge_densities[self.floored_positions[0], self.floored_positions[1]] += self.w1 * self.particle_charges
+        self.grid_charge_densities[self.floored_positions[0]+1, self.floored_positions[1]] += self.w2 * self.particle_charges
+        self.grid_charge_densities[self.floored_positions[0], self.floored_positions[1]+1] += self.w3 * self.particle_charges
+        self.grid_charge_densities[self.floored_positions[0]+1, self.floored_positions[1]+1] += self.w4 * self.particle_charges
 
-            # add densities to nodes scaled by the appropriate weighting and particle charge
-            self.grid_charge_densities[floor_x, floor_y] += w1[i] * particle_charge
-            self.grid_charge_densities[floor_x+1, floor_y] += w2[i] * particle_charge
-            self.grid_charge_densities[floor_x, floor_y+1] += w3[i] * particle_charge
-            self.grid_charge_densities[floor_x+1, floor_y+1] += w4[i] * particle_charge
-
-        self.grid_charge_densities /= (self.delta_x * self.delta_y)  # divide by the cell volume
+        self.grid_charge_densities /= (self.delta_x * self.delta_y)  # divide by the cell volume to get density
 
     def solve_grid_potentials(self):
         """Updates the potentials on the grid based on charge densities"""
@@ -152,27 +159,10 @@ class ParticleManager:
     def solve_particle_E(self):
         """Updates the electric field "felt" by each particle. Bilinearly interpolates grid E values onto particle
         positions."""
-
-        # method is similar to that when solving grid charge densities, except instead of depositing onto the grid, we
-        # are taking from it.
-
-        cell_length_distance = self.particle_positions / [[self.delta_x], [self.delta_y]]
-        floored_positions = np.floor(cell_length_distance).astype(int)
-        fractional_distance = (cell_length_distance - floored_positions)
-
-        w1 = (1 - fractional_distance[0, :]) * (1 - fractional_distance[1, :])  # bottom left
-        w2 = (fractional_distance[0, :]) * (1 - fractional_distance[1, :])  # bottom right
-        w3 = (1 - fractional_distance[0, :]) * (fractional_distance[1, :])  # top left
-        w4 = (fractional_distance[0, :]) * (fractional_distance[1, :])  # top right
-
-        for i in range(self.num_particles):
-            floor_x = floored_positions[0, i]
-            floor_y = floored_positions[1, i]
-
-            self.particle_E[:, i] = (self.grid_E[floor_x, floor_y, :] * w1[i] +
-                                self.grid_E[floor_x + 1, floor_y, :] * w2[i] +
-                                self.grid_E[floor_x, floor_y + 1, :] * w3[i] +
-                                self.grid_E[floor_x + 1, floor_y + 1, :] * w4[i])
+        self.particle_E = (self.grid_E[self.floored_positions[0], self.floored_positions[1], :].T * self.w1 +
+                           self.grid_E[self.floored_positions[0]+1, self.floored_positions[1], :].T * self.w2 +
+                           self.grid_E[self.floored_positions[0], self.floored_positions[1]+1, :].T * self.w3 +
+                           self.grid_E[self.floored_positions[0]+1, self.floored_positions[1]+1, :].T * self.w4)
 
     def solve_particle_forces(self):
         """Updates the force felt by each particle."""
@@ -180,40 +170,43 @@ class ParticleManager:
         self.particle_forces = self.particle_E * self.particle_charges
 
     def apply_boundary_conditions(self):
-        """Currently this function checks for any particles that are out of bounds and deletes them."""
-
+        """Checks if particles have left the system and applies the appropriate boundary condition."""
         particles_to_delete = []  # this list will store all particle indices that correspond to out of bounds particles
-        for i in range(self.num_particles):
-            particle_position = self.particle_positions[:, i]
 
-            if particle_position[0] >= self.x_length:  # apply RHS bc
-                if self.right_boundary_particle_interaction == BoundaryParticleInteraction.OPEN:
-                    particles_to_delete.append(i)
-                elif self.right_boundary_particle_interaction == BoundaryParticleInteraction.REFLECTIVE:
-                    self.particle_positions[0, i] = self.x_length - (particle_position[0] - self.x_length)
-                    self.particle_velocities[0, i] = -self.particle_velocities[0, i]
+        # masks to determine all particles that are outside the boundaries
+        right_mask = self.particle_positions[0] >= self.x_length
+        left_mask = self.particle_positions[0] < 0
+        upper_mask = self.particle_positions[1] >= self.y_length
+        lower_mask = self.particle_positions[1] < 0
 
-            elif particle_position[0] < 0:  # apply LHS bc
-                if self.left_boundary_particle_interaction == BoundaryParticleInteraction.OPEN:
-                    particles_to_delete.append(i)
-                elif self.left_boundary_particle_interaction == BoundaryParticleInteraction.REFLECTIVE:
-                    self.particle_positions[0, i] = -particle_position[0]
-                    self.particle_velocities[0, i] = -self.particle_velocities[0, i]
+        # if OPEN then we append those particle indices to the list of particles to delete
+        # if REFLECTIVE then we reflect their position across the boundary axis back into the system, and we
+        # reverse the correct component of velocity.
+        if self.right_boundary_particle_interaction == BoundaryParticleInteraction.OPEN:
+            particles_to_delete.append(np.arange(self.num_particles)[right_mask])
+        elif self.right_boundary_particle_interaction == BoundaryParticleInteraction.REFLECTIVE:
+            self.particle_positions[0][right_mask] = self.x_length - (self.particle_positions[0][right_mask] - self.x_length)
+            self.particle_velocities[0][right_mask] = -self.particle_velocities[0][right_mask]
 
-            if particle_position[1] >= self.y_length: # apply UPPER BC
-                if self.upper_boundary_particle_interaction == BoundaryParticleInteraction.OPEN:
-                    particles_to_delete.append(i)
-                elif self.upper_boundary_particle_interaction == BoundaryParticleInteraction.REFLECTIVE:
-                    self.particle_positions[1, i] = self.y_length - (particle_position[1] - self.y_length)
-                    self.particle_velocities[1, i] = -self.particle_velocities[1, i]
+        if self.left_boundary_particle_interaction == BoundaryParticleInteraction.OPEN:
+            particles_to_delete.append(np.arange(self.num_particles)[left_mask])
+        elif self.left_boundary_particle_interaction == BoundaryParticleInteraction.REFLECTIVE:
+            self.particle_positions[0][left_mask] = -self.particle_positions[0][left_mask]
+            self.particle_velocities[0][left_mask] = -self.particle_velocities[0][left_mask]
 
-            elif particle_position[1] < 0:  # apply LOWER BC
-                if self.lower_boundary_particle_interaction == BoundaryParticleInteraction.OPEN:
-                    particles_to_delete.append(i)
-                elif self.lower_boundary_particle_interaction == BoundaryParticleInteraction.REFLECTIVE:
-                    self.particle_positions[1, i] = -particle_position[1]
-                    self.particle_velocities[1, i] = -self.particle_velocities[1, i]
+        if self.upper_boundary_particle_interaction == BoundaryParticleInteraction.OPEN:
+            particles_to_delete.append(np.arange(self.num_particles)[upper_mask])
+        elif self.upper_boundary_particle_interaction == BoundaryParticleInteraction.REFLECTIVE:
+            self.particle_positions[1][upper_mask] = self.y_length - (self.particle_positions[1][upper_mask] - self.y_length)
+            self.particle_velocities[1][upper_mask] = -self.particle_velocities[1][upper_mask]
 
+        if self.lower_boundary_particle_interaction == BoundaryParticleInteraction.OPEN:
+            particles_to_delete.append(np.arange(self.num_particles)[lower_mask])
+        elif self.lower_boundary_particle_interaction == BoundaryParticleInteraction.REFLECTIVE:
+            self.particle_positions[1][lower_mask] = -self.particle_positions[1][lower_mask]
+            self.particle_velocities[1][lower_mask] = -self.particle_velocities[1][lower_mask]
+
+        # delete all particles that have left the system
         if len(particles_to_delete) > 0:
             self.delete_particles(particles_to_delete)
 
@@ -260,6 +253,7 @@ class ParticleManager:
                 boundary_condition.update(self.current_t_step * self.dt)
 
         # run methods in the correct order
+        self.calculate_particle_node_weights()
         self.solve_grid_charge_densities()
         self.solve_grid_potentials()
         self.solve_grid_E()

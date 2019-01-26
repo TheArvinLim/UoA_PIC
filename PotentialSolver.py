@@ -17,6 +17,7 @@ class PotentialSolver:
         :param eps_0: permitivitty of free space
         :param boundary_conditions: list of BoundaryCondition objects
         """
+        # TODO: Add ability to solve non linear systems with Gauss-Seidel method.
 
         self.boundary_conditions = boundary_conditions
         self.eps_0 = eps_0
