@@ -1,6 +1,6 @@
 import numpy as np
 
-
+# TODO: Give option to initialise new particle velocities from a distribution function.
 class ParticleSource:
     """Stores information about a particle source in the system"""
 
@@ -15,7 +15,6 @@ class ParticleSource:
         :param new_particle_charges: 1xN array of the new particles' charges
         :param frequency: frequency (hz) that this source should make new particles
         """
-
         self.new_particle_positions = np.array(new_particle_positions)
         self.new_particle_velocities = np.array(new_particle_velocities)
         self.new_particle_masses = np.array(new_particle_masses)

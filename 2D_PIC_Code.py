@@ -116,58 +116,58 @@ def animate_history(i):
 
 
 # SIMULATION SETTINGS
-num_time_steps = 2000  # num of time steps to simulate for
+num_time_steps = 5000  # num of time steps to simulate for
 animate_live = False  # animate simulation as it is running (VERY SLOW)
 animate_at_end = True  # animate simulation at end
 printout_interval = 500  # timesteps between printouts
 snapshot_interval = 10  # timesteps between snapshots
-eps_0 = 1
-delta_t = 0.01  # step size
+eps_0 = 1  # permittivity of free space
+delta_t = 0.05  # step size
 
 
 # INITIALISE PARTICLES
 def initialise_test():
     # PARAMETERS
-    num_x_nodes = 100
-    num_y_nodes = 100
-    delta_x = 0.1  # grid resolution
-    delta_y = 0.1  # grid resolution
+    num_x_nodes = 10
+    num_y_nodes = 10
+    delta_x = 1  # grid resolution
+    delta_y = 1  # grid resolution
     x_length = (num_x_nodes-1)*delta_x
     y_length = (num_y_nodes-1)*delta_y
-    num_particles = 100
+    num_particles = 20
 
-    particle_positions = np.random.rand(2, num_particles)*[[x_length], [y_length]]
-    particle_velocities = np.zeros((2, num_particles))
-    particle_charges = np.append(np.zeros(int(num_particles/2))-5, np.zeros(int(num_particles/2))+5)
-    particle_masses = np.append(np.zeros(int(num_particles/2))+1, np.zeros(int(num_particles/2))+1)
+    # particle_positions = np.random.rand(2, num_particles)*[[x_length], [y_length]]
+    # particle_velocities = np.random.rand(2, num_particles)*delta_x*10
+    # particle_charges = np.append(np.zeros(int(num_particles/2))-10, np.zeros(int(num_particles/2))+10)
+    # particle_masses = np.append(np.zeros(int(num_particles/2))+1, np.zeros(int(num_particles/2))+1)
 
-    # particle_positions = np.array([[], []])
-    # particle_velocities = np.array([[], []])
-    # particle_charges = np.array([])
-    # particle_masses = np.array([])
+    particle_positions = np.array([[], []])
+    particle_velocities = np.array([[], []])
+    particle_charges = np.array([])
+    particle_masses = np.array([])
 
     test_vel = 1
     four_point_cross = ParticleSource(
-        [[1, x_length - 1, x_length / 3, x_length / 3 * 2],  # x pos
-         [y_length / 3, y_length * 2 / 3, 1, y_length - 1]],  # y pos
+        [[delta_x, x_length - delta_x, x_length / 3, x_length / 3 * 2],  # x pos
+         [y_length / 3, y_length * 2 / 3, delta_y, y_length - delta_y]],  # y pos
         [[test_vel, -test_vel, 0, -0],  # x vel
          [0, 0, test_vel, -test_vel]],  # y vel
         [1, 1, 1, 1],  # mass
-        [2, -2, -2, 2],  # charge
-        0.05)  # freq
+        [1, -1, -1, 1],  # charge
+        1)  # freq
 
     positron_source = ParticleSource([[x_length/2], [y_length/3]], [[0], [0]], 1, 1, 0.5)
     electron_source = ParticleSource([[x_length/2], [y_length/3*2]], [[0], [0]], 1, -1, 0.5)
 
-    particle_sources = []
+    particle_sources = [four_point_cross]
 
-    # left_bc = create_uniform_edge_boundary(num_x_nodes, num_y_nodes, "LEFT", BoundaryTypes.DIRICHLET, 0)
-    # right_bc = create_uniform_edge_boundary(num_x_nodes, num_y_nodes, "RIGHT", BoundaryTypes.DIRICHLET, 0)
-    upper_bc = create_uniform_edge_boundary(num_x_nodes, num_y_nodes, "UPPER", BoundaryTypes.DIRICHLET, 0)
-    lower_bc = create_uniform_edge_boundary(num_x_nodes, num_y_nodes, "LOWER", BoundaryTypes.DIRICHLET, 0)
+    left_bc = create_uniform_edge_boundary(num_x_nodes, num_y_nodes, "LEFT", BoundaryTypes.DIRICHLET, 0.5)
+    right_bc = create_uniform_edge_boundary(num_x_nodes, num_y_nodes, "RIGHT", BoundaryTypes.DIRICHLET, -0.5)
+    upper_bc = create_uniform_edge_boundary(num_x_nodes, num_y_nodes, "UPPER", BoundaryTypes.DIRICHLET, 0.5)
+    lower_bc = create_uniform_edge_boundary(num_x_nodes, num_y_nodes, "LOWER", BoundaryTypes.DIRICHLET, -0.5)
 
-    left_bc = create_dynamic_edge_boundary(num_x_nodes, num_y_nodes, "LEFT", BoundaryTypes.DIRICHLET, sinusoidal)
-    right_bc = create_dynamic_edge_boundary(num_x_nodes, num_y_nodes, "RIGHT", BoundaryTypes.DIRICHLET, cosinusoidal)
+    # left_bc = create_dynamic_edge_boundary(num_x_nodes, num_y_nodes, "LEFT", BoundaryTypes.DIRICHLET, sinusoidal)
+    # right_bc = create_dynamic_edge_boundary(num_x_nodes, num_y_nodes, "RIGHT", BoundaryTypes.DIRICHLET, cosinusoidal)
     #upper_bc = create_dynamic_edge_boundary(num_x_nodes, num_y_nodes, "UPPER", BoundaryTypes.DIRICHLET, cosinusoidal)
     #lower_bc = create_dynamic_edge_boundary(num_x_nodes, num_y_nodes, "LOWER", BoundaryTypes.DIRICHLET, cosinusoidal)
 
@@ -175,10 +175,10 @@ def initialise_test():
 
     bcs = [left_bc, right_bc, upper_bc, lower_bc]
 
-    left_boundary_interaction = BoundaryParticleInteraction.REFLECTIVE
-    right_boundary_interaction = BoundaryParticleInteraction.REFLECTIVE
-    upper_boundary_interaction = BoundaryParticleInteraction.REFLECTIVE
-    lower_boundary_interaction = BoundaryParticleInteraction.REFLECTIVE
+    left_boundary_interaction = BoundaryParticleInteraction.OPEN
+    right_boundary_interaction = BoundaryParticleInteraction.OPEN
+    upper_boundary_interaction = BoundaryParticleInteraction.OPEN
+    lower_boundary_interaction = BoundaryParticleInteraction.OPEN
 
     return (particle_positions, particle_velocities, particle_charges, particle_masses, delta_t, eps_0,
             num_x_nodes, num_y_nodes, delta_x, delta_y, bcs, particle_sources,
@@ -195,13 +195,13 @@ fig = plt.figure(figsize=(6, 8))
 
 ax1 = fig.add_subplot(211)
 ax1.set_title("Densities")
-densities = ax1.imshow(np.zeros((particle_system.num_x_nodes, particle_system.num_y_nodes)), vmin=-200, vmax=200,
+densities = ax1.imshow(np.zeros((particle_system.num_x_nodes, particle_system.num_y_nodes)), vmin=-1, vmax=1,
                        interpolation="bicubic", origin="lower",
                        extent=[0, particle_system.x_length, 0, particle_system.y_length])
 
 ax2 = fig.add_subplot(212)
 ax2.set_title("Potential")
-potentials = ax2.imshow(np.zeros((particle_system.num_x_nodes, particle_system.num_y_nodes)), vmin=-3, vmax=3,
+potentials = ax2.imshow(np.zeros((particle_system.num_x_nodes, particle_system.num_y_nodes)), vmin=-1, vmax=1,
                         interpolation="bicubic", origin="lower",
                         extent=[0, particle_system.x_length, 0, particle_system.y_length])
 

@@ -58,7 +58,7 @@ class PotentialSolver:
 
                 elif boundary_condition.type == BoundaryTypes.NEUMANN:
                     # on the boundaries we must do a forward / backward difference depending on the direction of
-                    # the neumann condition
+                    # the Neumann condition
 
                     if boundary_condition.neumann_direction == 0:  # in x dir
                         if node_position[0] == 0:  # LHS boundary
@@ -83,8 +83,8 @@ class PotentialSolver:
                             self.A[row_num, row_num - 1] = - 1 / 2 / self.delta_y
 
         # for efficiency reasons, we solve this system using sparse LU decomposition
-        self.A_sparse = scipy.sparse.csc_matrix(self.A)
-        self.LU = scipy.sparse.linalg.splu(self.A_sparse)
+        self.A = scipy.sparse.csc_matrix(self.A)
+        self.LU = scipy.sparse.linalg.splu(self.A)
 
     def solve_potentials(self, grid_charge_densities):
         """

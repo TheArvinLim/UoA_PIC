@@ -23,6 +23,9 @@ class BoundaryCondition:
         :param magnitude_function: Magnitude(s) of the bc. Can be either float or function of time f(t)
         :param neumann_direction: if type is Neumann, specify whether in x (0) or y (1) direction
         """
+
+        # TODO: Allow for periodic boundary conditions
+
         self.positions = positions
         self.type = type
 
