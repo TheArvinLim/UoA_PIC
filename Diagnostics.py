@@ -1,6 +1,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
+# TODO: Velocity histogram
+# TODO: Export simulation data to file
+
 
 class EnergyDiagnostic:
     """Handles all energy related functions."""

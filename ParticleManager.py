@@ -3,13 +3,16 @@ import time
 from BoundaryClasses import BoundaryParticleInteraction
 from PotentialSolver import PotentialSolver
 from Integrator import LeapfrogIntegrator
-
+# TODO: Allow for r-z coordinate system with axisymmetric boundary condition to simulate cylindrical geometry
+# TODO: Allow for modelling charge density due to electrons via the Boltzmann relation
+# TODO: Convert to 3D
+# TODO: Implement electromagnetic effects
 
 class ParticleManager:
     """Handles all particle / grid operations. Main simulation class."""
     def __init__(self, particle_positions, particle_velocities, particle_charges, particle_masses,
                 delta_t, eps_0,
-                num_x_nodes, num_y_nodes, delta_x, delta_y,
+                num_x_nodes, num_y_nodes, x_length, y_length,
                 boundary_conditions=[],
                 particle_sources=[],
                 left_boundary_particle_interaction=BoundaryParticleInteraction.OPEN,
@@ -67,11 +70,10 @@ class ParticleManager:
         # the following arrays store grid parameters
         self.num_x_nodes = num_x_nodes
         self.num_y_nodes = num_y_nodes
-        self.delta_x = delta_x
-        self.delta_y = delta_y
-        self.x_length = (self.num_x_nodes-1)*self.delta_x  # the total length of the system in x direction
-        self.y_length = (self.num_y_nodes-1) * self.delta_y  # the total length of the system in y direction
-
+        self.delta_x = x_length / (self.num_x_nodes-1)
+        self.delta_y = y_length / (self.num_y_nodes-1)
+        self.x_length = x_length
+        self.y_length = y_length
         # store particle node weightings
         self.w1 = np.zeros(self.num_particles)
         self.w2 = np.zeros(self.num_particles)
@@ -93,7 +95,7 @@ class ParticleManager:
 
         self.particle_sources = particle_sources  # list of all particle sources
 
-        self.potential_solver = PotentialSolver(num_x_nodes, num_y_nodes, delta_x, delta_y, eps_0, boundary_conditions)
+        self.potential_solver = PotentialSolver(num_x_nodes, num_y_nodes, self.delta_x, self.delta_y, eps_0, boundary_conditions)
 
         if integration_method == "LEAPFROG":
             self.integrator = LeapfrogIntegrator()
