@@ -2,91 +2,18 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 import time as time
+from functools import partial
 
 from ParticleManager import ParticleManager
 from ParticleSource import ParticleSource
-from BoundaryClasses import BoundaryCondition, BoundaryParticleInteraction, BoundaryTypes
 from Diagnostics import EnergyDiagnostic, ParticleSystemHistory
+from HelperFunctions import*
 
 # THIS CODE IS 54% RILEY APPROVED
 
-# FUNCTIONS ALLOW FOR EASY BOUNDARY CONDITION CREATION
-def create_charged_plate(lower_left_corner, upper_right_corner, value, bc_type, neumann_direction=None):
-    xsize = upper_right_corner[0] - lower_left_corner[0] + 1
-    ysize = upper_right_corner[1] - lower_left_corner[1] + 1
 
-    xs = np.zeros((xsize * ysize))
-    ys = np.zeros((xsize * ysize))
-    values = np.zeros((xsize * ysize))
-
-    for i in range(xsize):
-        for j in range(ysize):
-            xs[j + i * ysize] = i + lower_left_corner[0]
-            ys[j + i * ysize] = j + lower_left_corner[1]
-            values[j + i * ysize] = value
-
-    charged_plate = BoundaryCondition(bc_type, np.array([xs.astype(int), ys.astype(int)]), values, neumann_direction=neumann_direction)
-
-    return charged_plate
-
-
-def create_uniform_edge_boundary(num_x_nodes, num_y_nodes, side, bc_type, value, neumann_direction=None):
-    if side == "LEFT":
-        xs = np.zeros(num_y_nodes)
-        ys = np.arange(num_y_nodes)
-        values = np.zeros(num_y_nodes) + value
-    elif side == "RIGHT":
-        xs = np.zeros(num_y_nodes) + num_x_nodes - 1
-        ys = np.arange(num_y_nodes)
-        values = np.zeros(num_y_nodes) + value
-    elif side == "LOWER":
-        xs = np.arange(num_x_nodes)
-        ys = np.zeros(num_x_nodes)
-        values = np.zeros(num_x_nodes) + value
-    elif side == "UPPER":
-        xs = np.arange(num_x_nodes)
-        ys = np.zeros(num_x_nodes) + num_y_nodes - 1
-        values = np.zeros(num_x_nodes) + value
-
-    edge_boundary = BoundaryCondition(bc_type, np.array([xs.astype(int), ys.astype(int)]), values, neumann_direction=neumann_direction)
-
-    return edge_boundary
-
-
-def create_dynamic_edge_boundary(num_x_nodes, num_y_nodes, side, bc_type, dynamic_values_function):
-    if side == "LEFT":
-        xs = np.zeros(num_y_nodes)
-        ys = np.arange(num_y_nodes)
-        values = dynamic_values_function(0)
-    elif side == "RIGHT":
-        xs = np.zeros(num_y_nodes) + num_x_nodes - 1
-        ys = np.arange(num_y_nodes)
-        values = dynamic_values_function(0)
-    elif side == "LOWER":
-        xs = np.arange(num_x_nodes)
-        ys = np.zeros(num_x_nodes)
-        values = dynamic_values_function(0)
-    elif side == "UPPER":
-        xs = np.arange(num_x_nodes)
-        ys = np.zeros(num_x_nodes) + num_y_nodes - 1
-        values = dynamic_values_function(0)
-
-    edge_boundary = BoundaryCondition(bc_type, np.array([xs.astype(int), ys.astype(int)]), dynamic_values_function)
-
-    return edge_boundary
-
-
-# FUNCTIONS FOR TESTING DYNAMIC BOUNDARY CONDITIONS
-def cosinusoidal(t):
-    return np.zeros(100)+np.sin(t + np.pi)*2
-
-
-def sinusoidal(t):
-    return np.zeros(100)+np.sin(t)*2
-
-
-# ANIMATION
 # TODO: Save animation to video
+# ANIMATION
 def animate_step(i):
     particle_system.update_step()
 
@@ -116,18 +43,18 @@ def animate_history(i):
 
 
 # SIMULATION SETTINGS
-num_time_steps = 5000  # num of time steps to simulate for
 animate_live = False  # animate simulation as it is running (VERY SLOW)
 animate_at_end = True  # animate simulation at end
 printout_interval = 500  # timesteps between printouts
-snapshot_interval = 10  # timesteps between snapshots
-eps_0 = 1  # permittivity of free space
-delta_t = 0.05  # step size
+snapshot_interval = 2  # timesteps between snapshots
+num_time_steps = 1000  # num of time steps to simulate for
 
 
 # INITIALISE PARTICLES
 def initialise_test():
     # PARAMETERS
+    eps_0 = 1  # permittivity of free space
+    delta_t = 0.05  # step size
     num_x_nodes = 100
     num_y_nodes = 100
     x_length = 100
@@ -135,17 +62,17 @@ def initialise_test():
     delta_x = x_length / (num_x_nodes-1)  # grid resolution
     delta_y = y_length / (num_y_nodes-1)  # grid resolution
 
-    num_particles = 1000
+    num_particles = 100  # keep this as an even number for now
 
-    particle_positions = np.random.rand(2, num_particles)*[[x_length], [y_length]]
-    particle_velocities = np.random.rand(2, num_particles)*delta_x*10
-    particle_charges = np.append(np.zeros(int(num_particles/2))-10, np.zeros(int(num_particles/2))+10)
-    particle_masses = np.append(np.zeros(int(num_particles/2))+1, np.zeros(int(num_particles/2))+1)
+    # particle_positions = np.random.rand(2, num_particles)*[[x_length], [y_length]]
+    # particle_velocities = np.random.rand(2, num_particles)*delta_x*1
+    # particle_charges = np.append(np.zeros(int(num_particles/2))-10, np.zeros(int(num_particles/2))+10)
+    # particle_masses = np.append(np.zeros(int(num_particles/2))+1, np.zeros(int(num_particles/2))+1)
 
-    # particle_positions = np.array([[], []])
-    # particle_velocities = np.array([[], []])
-    # particle_charges = np.array([])
-    # particle_masses = np.array([])
+    particle_positions = np.array([[], []])
+    particle_velocities = np.array([[], []])
+    particle_charges = np.array([])
+    particle_masses = np.array([])
 
     test_vel = 1
     four_point_cross = ParticleSource(
@@ -157,20 +84,27 @@ def initialise_test():
         [1, -1, -1, 1],  # charge
         1)  # freq
 
+    side_input = ParticleSource(
+        partial(uniform_side_flux, side="LEFT", x_length=x_length, y_length=y_length, delta_x=delta_x, delta_y=delta_y),
+        partial(new_velocity, v_drift=np.array([[0], [0]]), v_thermal=10, M=3),
+        [1],
+        [5],
+        1)
+
     positron_source = ParticleSource([[x_length/2], [y_length/3]], [[0], [0]], 1, 1, 0.5)
     electron_source = ParticleSource([[x_length/2], [y_length/3*2]], [[0], [0]], 1, -1, 0.5)
 
-    particle_sources = []
+    particle_sources = [side_input]
 
     left_bc = create_uniform_edge_boundary(num_x_nodes, num_y_nodes, "LEFT", BoundaryTypes.DIRICHLET, 0)
     right_bc = create_uniform_edge_boundary(num_x_nodes, num_y_nodes, "RIGHT", BoundaryTypes.DIRICHLET, 0)
     upper_bc = create_uniform_edge_boundary(num_x_nodes, num_y_nodes, "UPPER", BoundaryTypes.DIRICHLET, 0)
     lower_bc = create_uniform_edge_boundary(num_x_nodes, num_y_nodes, "LOWER", BoundaryTypes.DIRICHLET, 0)
 
-    # left_bc = create_dynamic_edge_boundary(num_x_nodes, num_y_nodes, "LEFT", BoundaryTypes.DIRICHLET, sinusoidal)
-    # right_bc = create_dynamic_edge_boundary(num_x_nodes, num_y_nodes, "RIGHT", BoundaryTypes.DIRICHLET, cosinusoidal)
-    #upper_bc = create_dynamic_edge_boundary(num_x_nodes, num_y_nodes, "UPPER", BoundaryTypes.DIRICHLET, cosinusoidal)
-    #lower_bc = create_dynamic_edge_boundary(num_x_nodes, num_y_nodes, "LOWER", BoundaryTypes.DIRICHLET, cosinusoidal)
+    # left_bc = create_dynamic_edge_boundary(num_x_nodes, num_y_nodes, "LEFT", BoundaryTypes.DIRICHLET, partial(sinusoidal, length=y_length, amplitude=2, period=20, phase=0))
+    # right_bc = create_dynamic_edge_boundary(num_x_nodes, num_y_nodes, "RIGHT", BoundaryTypes.DIRICHLET, partial(sinusoidal, length=y_length, amplitude=2, period=20, phase=np.pi))
+    # upper_bc = create_dynamic_edge_boundary(num_x_nodes, num_y_nodes, "UPPER", BoundaryTypes.DIRICHLET, cosinusoidal)
+    # lower_bc = create_dynamic_edge_boundary(num_x_nodes, num_y_nodes, "LOWER", BoundaryTypes.DIRICHLET, cosinusoidal)
 
     charged_plate = create_charged_plate([50, 50], [55, 55], 1, BoundaryTypes.DIRICHLET)
 
@@ -186,6 +120,73 @@ def initialise_test():
             left_boundary_interaction, right_boundary_interaction, upper_boundary_interaction, lower_boundary_interaction)
 
 
+def test_2():
+    # Constants
+    EPS_0 = 8.854e-12  # permittivity of free space, F/m
+    QE = 1.602e-19  # elementary charge, C
+    K = 1.381e-23  # boltzmann constant, m2kgs-2K-1
+    MI = 32*1.661e-27  # ion mass, kg
+    ME = 9.109e-31  # electron mass, kg
+
+    # Sim settings
+    n0 = 1e12  # neutral density, 1/m3
+    phi0 = 0  # reference potential, V
+    Te = 1  # electron temperature, eV
+    Ti = 0.1  # ion velocity, eV
+    v_drift = 7000  # ion injection velocity, m/s
+    phi_p = -5  # wall potential, V
+
+    # Calc plasma parameters
+    lD = np.sqrt(EPS_0*Te / (n0*QE))  # Debye length, m
+    vth = np.sqrt(2*QE*Ti/Mi)  # Thermal velocity of ions, eV
+
+    # Sim domain
+    nx = 16  # num x nodes
+    ny = 10  # num y nodes
+    ts = 200  # num time steps
+    dh = lD  # cell width / height
+    np_insert = (ny-1)*15  # number of particles to insert per cell
+
+    # Other values
+    nn = nx*ny  # total number of nodes
+    dt = 0.1*dh/v_drift  # time step, s, cross 0.1dh per timestep
+    Lx = (nx-1)*dh  # x domain length
+    Ly = (ny-1)*dh  # y domain length
+
+    # Plate dimensions
+    lower_left = [np.floor(nx/3).astype(int), 0]
+    upper_right = [np.floor(nx/3).astype(int)+2, np.floor(ny/2).astype(int)]
+
+    # Calc specific weight
+    flux = n0*v_drift*Ly  # flux of entering particles
+    npt = flux*dt  # number of real particles created per time step
+    spwt = npt/np_insert  # ratio of real particles per macroparticle
+    mp_q = 1  # macroparticle charge
+
+    # Particle arrays
+    particle_positions = np.zeros((2, 0))
+    particle_velocities = np.zeros((2, 0))
+    particle_charges = np.zeros((1, 0))
+    particle_masses = np.zeros((1, 0))
+
+    # Boundary conditions
+    left_bc = create_uniform_edge_boundary(nx, ny, "LEFT", BoundaryTypes.NEUMANN, 0)
+    right_bc = create_uniform_edge_boundary(nx, ny, "RIGHT", BoundaryTypes.NEUMANN, 0)
+    upper_bc = create_uniform_edge_boundary(nx, ny, "UPPER", BoundaryTypes.NEUMANN, 0)
+    lower_bc = create_uniform_edge_boundary(nx, ny, "LOWER", BoundaryTypes.DIRICHLET, 0)
+
+    left_boundary_interaction = BoundaryParticleInteraction.OPEN
+    right_boundary_interaction = BoundaryParticleInteraction.OPEN
+    upper_boundary_interaction = BoundaryParticleInteraction.OPEN
+    lower_boundary_interaction = BoundaryParticleInteraction.REFLECTIVE
+
+    bcs = [left_bc, right_bc, upper_bc, lower_bc]
+
+    return (particle_positions, particle_velocities, particle_charges, particle_masses, dt, EPS_0,
+            nx, ny, Lx, Ly, bcs, particle_sources,
+            left_boundary_interaction, right_boundary_interaction, upper_boundary_interaction, lower_boundary_interaction)
+
+
 # CREATE PARTICLE SYSTEM
 particle_system = ParticleManager(*initialise_test())
 particle_system_history = ParticleSystemHistory()
@@ -196,13 +197,13 @@ fig = plt.figure(figsize=(6, 8))
 
 ax1 = fig.add_subplot(211)
 ax1.set_title("Densities")
-densities = ax1.imshow(np.zeros((particle_system.num_x_nodes, particle_system.num_y_nodes)), vmin=-5, vmax=5,
+densities = ax1.imshow(np.zeros((particle_system.num_x_nodes, particle_system.num_y_nodes)), vmin=-7, vmax=7,
                        interpolation="bicubic", origin="lower",
                        extent=[0, particle_system.x_length, 0, particle_system.y_length])
 
 ax2 = fig.add_subplot(212)
 ax2.set_title("Potential")
-potentials = ax2.imshow(np.zeros((particle_system.num_x_nodes, particle_system.num_y_nodes)), vmin=-10, vmax=10,
+potentials = ax2.imshow(np.zeros((particle_system.num_x_nodes, particle_system.num_y_nodes)), vmin=-7, vmax=7,
                         interpolation="bicubic", origin="lower",
                         extent=[0, particle_system.x_length, 0, particle_system.y_length])
 
@@ -222,7 +223,7 @@ else:
             approx_time_to_go = steps_to_go*average_time_per_step
             print("Approx Time To Finish =", round(approx_time_to_go), "s")
             print("T Step =", particle_system.current_t_step, "/", num_time_steps)
-            print("Simulation Time =", particle_system.current_t_step*particle_system.dt, "s")
+            print("Simulation Time =", particle_system.current_t_step*particle_system.delta_t, "s")
             print("Total Energy =", energy_diagnostic.energy_total_history[-1])
             print("Num Particles =", particle_system.num_particles)
             print(" ")

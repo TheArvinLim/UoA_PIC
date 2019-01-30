@@ -14,10 +14,10 @@ class PotentialSolver:
         :param num_y_nodes: num of nodes in y direction
         :param delta_x: cell size in x direction
         :param delta_y: cell size in y direction
-        :param eps_0: permitivitty of free space
+        :param eps_0: permittivity of free space
         :param boundary_conditions: list of BoundaryCondition objects
         """
-        # TODO: Add ability to solve non linear systems with Gauss-Seidel method.
+        # TODO: Add iterative solver because direct solving via LU decomposition requires an excess of memory
 
         self.boundary_conditions = boundary_conditions
         self.eps_0 = eps_0

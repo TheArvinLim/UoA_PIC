@@ -14,7 +14,7 @@ class BoundaryParticleInteraction(Enum):
 
 
 class BoundaryCondition:
-
+    # TODO: Allow for periodic boundary conditions
     """Object that stores the type and value of a given boundary condition"""
     def __init__(self, type, positions, magnitude_function, neumann_direction=None):
         """
@@ -23,9 +23,6 @@ class BoundaryCondition:
         :param magnitude_function: Magnitude(s) of the bc. Can be either float or function of time f(t)
         :param neumann_direction: if type is Neumann, specify whether in x (0) or y (1) direction
         """
-
-        # TODO: Allow for periodic boundary conditions
-
         self.positions = positions
         self.type = type
 
@@ -33,15 +30,16 @@ class BoundaryCondition:
         if self.type == BoundaryTypes.NEUMANN:
             if neumann_direction is None:
                 raise ValueError('Please specify direction of Neumann boundary condition')
-            elif not (neumann_direction==0 or neumann_direction==1):
-                raise ValueError('Please specify Neumann boundary condition as either in x direction (0) or y direction (1)')
+            elif not (neumann_direction == 0 or neumann_direction == 1):
+                raise ValueError('Please specify Neumann boundary condition as either in '
+                                 'x direction (0) or y direction (1)')
             else:
                 self.neumann_direction = neumann_direction
 
         # check whether a function of time, or just static
         if callable(magnitude_function):
             self.magnitude_function = magnitude_function
-            self.values = magnitude_function(0)
+            self.values = magnitude_function(t=0)
             self.dynamic = True
         else:
             self.values = magnitude_function
@@ -49,4 +47,4 @@ class BoundaryCondition:
 
     def update(self, t):
         """This function updates the magnitude of this boundary condition."""
-        self.values = self.magnitude_function(t)
+        self.values = self.magnitude_function(t=t)
