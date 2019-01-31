@@ -53,13 +53,15 @@ class EnergyDiagnostic:
 class ParticleSystemHistory:
     # data structures for saving snapshots
     def __init__(self):
+        self.simulation_time_history = []
         self.grid_potentials_history = []
         self.grid_charge_densities_history = []
         self.particle_positions_history = []
         self.grid_E_history = []
 
     def take_snapshot(self, particle_system):
-        self.grid_potentials_history = self.grid_potentials_history + [particle_system.grid_potentials]
-        self.grid_charge_densities_history = self.grid_charge_densities_history + [particle_system.grid_charge_densities]
-        self.particle_positions_history = self.particle_positions_history + [particle_system.particle_positions]
-        self.grid_E_history = self.grid_E_history + [particle_system.grid_E]
+        self.simulation_time_history.append(particle_system.simulation_time)
+        self.grid_potentials_history.append(particle_system.grid_potentials)
+        self.grid_charge_densities_history.append(particle_system.grid_charge_densities)
+        self.particle_positions_history.append(particle_system.particle_positions)
+        self.grid_E_history.append(particle_system.grid_E)

@@ -12,6 +12,7 @@ class BoundaryParticleInteraction(Enum):
     """Stores all possible actions to perform on a particle that collides with a boundary"""
     DESTROY = 0  # destroys the particle
     REFLECT = 1  # reflects the particle
+    PASSTHROUGH = 2
 
 
 class BoundaryLocations(Enum):

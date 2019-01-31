@@ -1,4 +1,5 @@
 import numpy as np
+import matplotlib.colors as colours
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 import time as time
@@ -30,16 +31,16 @@ def animate_step(i):
 
 
 def animate_history(i):
-    # animate particles
-    # positions.set_data(particle_system.particle_positions[0, :], particle_system.particle_positions[1, :])
-
     # animate charge density
     densities.set_data(particle_system_history.grid_charge_densities_history[i].T)
+
+    # set time text
+    timetext.set_text(f'{particle_system_history.simulation_time_history[i]*1000:<6.4f}ms')
 
     # animate potentials
     potentials.set_array(particle_system_history.grid_potentials_history[i].T)
 
-    return potentials, densities,
+    return potentials, densities, timetext
 
 
 # SIMULATION SETTINGS
@@ -47,54 +48,59 @@ animate_live = False  # animate simulation as it is running (VERY SLOW)
 animate_at_end = True  # animate simulation at end
 printout_interval = 500  # timesteps between printouts
 snapshot_interval = 2  # timesteps between snapshots
-num_time_steps = 10000  # num of time steps to simulate for
+num_time_steps = 5000  # num of time steps to simulate for
 
 
 # INITIALISE PARTICLES
 def initialise_test():
     # PARAMETERS
-    eps_0 = 1  # permittivity of free space
-    delta_t = 0.05  # step size
+    eps_0 = 8.854e-12  # permittivity of free space
+    delta_t = 1e-6  # step size
     num_x_nodes = 150
     num_y_nodes = 100
-    x_length = 150
-    y_length = 100
+    x_length = 0.015
+    y_length = 0.01
     delta_x = x_length / (num_x_nodes-1)  # grid resolution
     delta_y = y_length / (num_y_nodes-1)  # grid resolution
 
-    num_particles = 100  # keep this as an even number for now
+    num_particles = 1000  # keep this as an even number for now
 
-    # particle_positions = np.random.rand(2, num_particles)*[[x_length], [y_length]]
-    # particle_velocities = np.random.rand(2, num_particles)*delta_x*1
-    # particle_charges = np.append(np.zeros(int(num_particles/2))-10, np.zeros(int(num_particles/2))+10)
-    # particle_masses = np.append(np.zeros(int(num_particles/2))+1, np.zeros(int(num_particles/2))+1)
+    # particle_positions = np.array([[], []])
+    # particle_velocities = np.array([[], []])
+    # particle_charges = np.array([])
+    # particle_masses = np.array([])
 
-    ion_input = ParticleSource(
-        partial(uniform_side_flux, side="LEFT", x_length=x_length, y_length=y_length, delta_x=delta_x, delta_y=delta_y, v_drift=5, delta_t=delta_t),
-        partial(new_velocity, v_drift=np.array([[5], [0]]), v_thermal=10, M=3),
-        [1],
-        [1],
-        10)
+    particle_positions = np.random.rand(2, num_particles)*[[x_length], [y_length]]
+    particle_velocities = (np.random.rand(2, num_particles)-0.5)*10
+    particle_charges = np.append(np.zeros(int(num_particles/2))+1.602e-19, np.zeros(int(num_particles/2))-1.602e-19)
+    particle_masses = np.append(np.zeros(int(num_particles/2))+32*1.661e-27, np.zeros(int(num_particles/2))+9.109e-31)
 
-    electron_input = ParticleSource(
-        partial(uniform_side_flux, side="LEFT", x_length=x_length, y_length=y_length, delta_x=delta_x, delta_y=delta_y, v_drift=5, delta_t=delta_t),
-        partial(new_velocity, v_drift=np.array([[5], [0]]), v_thermal=10, M=3),
-        [1],
-        [-1],
-        10)
+    # ion_input = ParticleSource(
+    #     partial(uniform_side_flux, side="LEFT", x_length=x_length, y_length=y_length, delta_x=delta_x, delta_y=delta_y, v_drift=10, delta_t=delta_t),
+    #     partial(new_velocity, v_drift=np.array([[7000], [0]]), v_thermal=5, M=3),
+    #     [32*1.661e-27],
+    #     [1.602e-19],
+    #     1e9)
+    #
+    # electron_input = ParticleSource(
+    #     partial(uniform_side_flux, side="LEFT", x_length=x_length, y_length=y_length, delta_x=delta_x, delta_y=delta_y, v_drift=10, delta_t=delta_t),
+    #     partial(new_velocity, v_drift=np.array([[700000], [0]]), v_thermal=5, M=3),
+    #     [9.109e-31],
+    #     [-1.602e-19],
+    #     1e9)
 
-    particle_sources = [ion_input, electron_input]
+    particle_sources = []
 
-    left_bc = create_uniform_edge_boundary(num_x_nodes, num_y_nodes, "LEFT", BoundaryTypes.DIRICHLET, 0, BoundaryParticleInteraction.DESTROY)
-    right_bc = create_uniform_edge_boundary(num_x_nodes, num_y_nodes, "RIGHT", BoundaryTypes.NEUMANN, 0, BoundaryParticleInteraction.DESTROY)
-    upper_bc = create_uniform_edge_boundary(num_x_nodes, num_y_nodes, "UPPER", BoundaryTypes.NEUMANN, 0, BoundaryParticleInteraction.DESTROY)
-    lower_bc = create_uniform_edge_boundary(num_x_nodes, num_y_nodes, "LOWER", BoundaryTypes.NEUMANN, 0, BoundaryParticleInteraction.REFLECT)
+    left_bc = create_uniform_edge_boundary(num_x_nodes, num_y_nodes, "LEFT", BoundaryTypes.DIRICHLET, 0, BoundaryParticleInteraction.REFLECT)
+    right_bc = create_uniform_edge_boundary(num_x_nodes, num_y_nodes, "RIGHT", BoundaryTypes.DIRICHLET, 0, BoundaryParticleInteraction.REFLECT)
+    upper_bc = create_uniform_edge_boundary(num_x_nodes, num_y_nodes, "UPPER", BoundaryTypes.DIRICHLET, 0, BoundaryParticleInteraction.REFLECT)
+    lower_bc = create_uniform_edge_boundary(num_x_nodes, num_y_nodes, "LOWER", BoundaryTypes.DIRICHLET, 0, BoundaryParticleInteraction.REFLECT)
 
-    charged_plate = create_charged_plate([40, 0], [60, 50], -20, BoundaryTypes.DIRICHLET, BoundaryParticleInteraction.DESTROY)
+    charged_plate = create_charged_plate([int(num_x_nodes/3), 0], [int(num_x_nodes/2), int(num_y_nodes/2)], -1, BoundaryTypes.DIRICHLET, BoundaryParticleInteraction.DESTROY)
 
-    bcs = [left_bc, right_bc, upper_bc, lower_bc, charged_plate]
+    bcs = [left_bc, right_bc, upper_bc, lower_bc]
 
-    return (delta_t, eps_0, num_x_nodes, num_y_nodes, x_length, y_length, bcs, particle_sources)
+    return delta_t, eps_0, num_x_nodes, num_y_nodes, x_length, y_length, particle_positions, particle_velocities, particle_charges, particle_masses, bcs, particle_sources
 
 
 def test_2():
@@ -162,10 +168,14 @@ def test_2():
 
 
 # CREATE PARTICLE SYSTEM
-delta_t, eps_0, num_x_nodes, num_y_nodes, x_length, y_length, bcs, particle_sources = initialise_test()
+delta_t, eps_0, num_x_nodes, num_y_nodes, x_length, y_length, \
+particle_positions, particle_velocities, particle_charges, particle_masses, \
+bcs, particle_sources = initialise_test()
 
 particle_system = ParticleManager(delta_t, eps_0, num_x_nodes, num_y_nodes, x_length, y_length,
+                                  particle_positions, particle_velocities, particle_charges, particle_masses,
                                   boundary_conditions=bcs, particle_sources=particle_sources)
+
 particle_system_history = ParticleSystemHistory()
 energy_diagnostic = EnergyDiagnostic()
 
@@ -174,15 +184,22 @@ fig = plt.figure(figsize=(6, 8))
 
 ax1 = fig.add_subplot(211)
 ax1.set_title("Densities")
-densities = ax1.imshow(np.zeros((particle_system.num_x_nodes, particle_system.num_y_nodes)), vmin=-5, vmax=5,
+densities = ax1.imshow(np.zeros((particle_system.num_x_nodes, particle_system.num_y_nodes)),
+                       cmap="plasma", vmin=-5e-11, vmax=5e-11,
                        interpolation="bicubic", origin="lower",
                        extent=[0, particle_system.x_length, 0, particle_system.y_length])
 
 ax2 = fig.add_subplot(212)
 ax2.set_title("Potential")
-potentials = ax2.imshow(np.zeros((particle_system.num_x_nodes, particle_system.num_y_nodes)), vmin=-30, vmax=30,
+potentials = ax2.imshow(np.zeros((particle_system.num_x_nodes, particle_system.num_y_nodes)),
+                        cmap="plasma", vmin=-5e-8, vmax=5e-8,
                         interpolation="bicubic", origin="lower",
                         extent=[0, particle_system.x_length, 0, particle_system.y_length])
+
+ax3 = fig.add_subplot(211)
+timetext = ax3.text(particle_system.x_length/2, particle_system.y_length*0.9, "0")
+
+
 
 if animate_live:
     animation_object = animation.FuncAnimation(fig, animate_step, interval=1, blit=True)
@@ -211,10 +228,11 @@ else:
             energy_diagnostic.calc_system_energy(particle_system)
 
 print("Simulation finished!")
-input("Press ENTER to play animation")
+#input("Press ENTER to play animation")
 
 if animate_at_end:  # run animation
     animation_object = animation.FuncAnimation(fig, animate_history, frames=len(particle_system_history.grid_potentials_history), save_count=len(particle_system_history.grid_potentials_history), interval=1, blit=True)
+    #animation_object.save('video.mp4', writer="ffmpeg")
     plt.show()
 
 # plot energy

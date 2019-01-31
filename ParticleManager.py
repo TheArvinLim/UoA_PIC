@@ -48,6 +48,7 @@ class ParticleManager:
         :param collision_scheme: collision model. Options: {NONE, MONTE_CARLO}
         """
         self.start_time = time.time()
+        self.simulation_time = 0  # keeps track of time within the simulation (s)
 
         self.dimensions = 2  # This is a 2D PIC simulation, must remain 2 for now.
 
@@ -233,7 +234,8 @@ class ParticleManager:
 
         # add particles from sources
         for particle_source in self.particle_sources:
-            if not (self.current_t_step*self.delta_t) % (1/particle_source.frequency) == (self.current_t_step*(self.delta_t-1)) % (1/particle_source.frequency):
+            period = 1/particle_source.frequency
+            if np.floor(self.simulation_time / period) > np.floor((self.simulation_time - self.delta_t) / period):
                 self.add_particles(particle_source)
 
         # update dynamic boundary conditions
@@ -254,3 +256,4 @@ class ParticleManager:
         self.resolve_collisions()
 
         self.current_t_step += 1
+        self.simulation_time += self.delta_t
