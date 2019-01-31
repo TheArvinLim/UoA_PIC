@@ -47,7 +47,7 @@ animate_live = False  # animate simulation as it is running (VERY SLOW)
 animate_at_end = True  # animate simulation at end
 printout_interval = 500  # timesteps between printouts
 snapshot_interval = 2  # timesteps between snapshots
-num_time_steps = 1000  # num of time steps to simulate for
+num_time_steps = 10000  # num of time steps to simulate for
 
 
 # INITIALISE PARTICLES
@@ -55,9 +55,9 @@ def initialise_test():
     # PARAMETERS
     eps_0 = 1  # permittivity of free space
     delta_t = 0.05  # step size
-    num_x_nodes = 100
+    num_x_nodes = 150
     num_y_nodes = 100
-    x_length = 100
+    x_length = 150
     y_length = 100
     delta_x = x_length / (num_x_nodes-1)  # grid resolution
     delta_y = y_length / (num_y_nodes-1)  # grid resolution
@@ -69,55 +69,32 @@ def initialise_test():
     # particle_charges = np.append(np.zeros(int(num_particles/2))-10, np.zeros(int(num_particles/2))+10)
     # particle_masses = np.append(np.zeros(int(num_particles/2))+1, np.zeros(int(num_particles/2))+1)
 
-    particle_positions = np.array([[], []])
-    particle_velocities = np.array([[], []])
-    particle_charges = np.array([])
-    particle_masses = np.array([])
-
-    test_vel = 1
-    four_point_cross = ParticleSource(
-        [[delta_x, x_length - delta_x, x_length / 3, x_length / 3 * 2],  # x pos
-         [y_length / 3, y_length * 2 / 3, delta_y, y_length - delta_y]],  # y pos
-        [[test_vel, -test_vel, 0, -0],  # x vel
-         [0, 0, test_vel, -test_vel]],  # y vel
-        [1, 1, 1, 1],  # mass
-        [1, -1, -1, 1],  # charge
-        1)  # freq
-
-    side_input = ParticleSource(
-        partial(uniform_side_flux, side="LEFT", x_length=x_length, y_length=y_length, delta_x=delta_x, delta_y=delta_y),
-        partial(new_velocity, v_drift=np.array([[0], [0]]), v_thermal=10, M=3),
+    ion_input = ParticleSource(
+        partial(uniform_side_flux, side="LEFT", x_length=x_length, y_length=y_length, delta_x=delta_x, delta_y=delta_y, v_drift=5, delta_t=delta_t),
+        partial(new_velocity, v_drift=np.array([[5], [0]]), v_thermal=10, M=3),
         [1],
-        [5],
-        1)
+        [1],
+        10)
 
-    positron_source = ParticleSource([[x_length/2], [y_length/3]], [[0], [0]], 1, 1, 0.5)
-    electron_source = ParticleSource([[x_length/2], [y_length/3*2]], [[0], [0]], 1, -1, 0.5)
+    electron_input = ParticleSource(
+        partial(uniform_side_flux, side="LEFT", x_length=x_length, y_length=y_length, delta_x=delta_x, delta_y=delta_y, v_drift=5, delta_t=delta_t),
+        partial(new_velocity, v_drift=np.array([[5], [0]]), v_thermal=10, M=3),
+        [1],
+        [-1],
+        10)
 
-    particle_sources = [side_input]
+    particle_sources = [ion_input, electron_input]
 
-    left_bc = create_uniform_edge_boundary(num_x_nodes, num_y_nodes, "LEFT", BoundaryTypes.DIRICHLET, 0)
-    right_bc = create_uniform_edge_boundary(num_x_nodes, num_y_nodes, "RIGHT", BoundaryTypes.DIRICHLET, 0)
-    upper_bc = create_uniform_edge_boundary(num_x_nodes, num_y_nodes, "UPPER", BoundaryTypes.DIRICHLET, 0)
-    lower_bc = create_uniform_edge_boundary(num_x_nodes, num_y_nodes, "LOWER", BoundaryTypes.DIRICHLET, 0)
+    left_bc = create_uniform_edge_boundary(num_x_nodes, num_y_nodes, "LEFT", BoundaryTypes.DIRICHLET, 0, BoundaryParticleInteraction.DESTROY)
+    right_bc = create_uniform_edge_boundary(num_x_nodes, num_y_nodes, "RIGHT", BoundaryTypes.NEUMANN, 0, BoundaryParticleInteraction.DESTROY)
+    upper_bc = create_uniform_edge_boundary(num_x_nodes, num_y_nodes, "UPPER", BoundaryTypes.NEUMANN, 0, BoundaryParticleInteraction.DESTROY)
+    lower_bc = create_uniform_edge_boundary(num_x_nodes, num_y_nodes, "LOWER", BoundaryTypes.NEUMANN, 0, BoundaryParticleInteraction.REFLECT)
 
-    # left_bc = create_dynamic_edge_boundary(num_x_nodes, num_y_nodes, "LEFT", BoundaryTypes.DIRICHLET, partial(sinusoidal, length=y_length, amplitude=2, period=20, phase=0))
-    # right_bc = create_dynamic_edge_boundary(num_x_nodes, num_y_nodes, "RIGHT", BoundaryTypes.DIRICHLET, partial(sinusoidal, length=y_length, amplitude=2, period=20, phase=np.pi))
-    # upper_bc = create_dynamic_edge_boundary(num_x_nodes, num_y_nodes, "UPPER", BoundaryTypes.DIRICHLET, cosinusoidal)
-    # lower_bc = create_dynamic_edge_boundary(num_x_nodes, num_y_nodes, "LOWER", BoundaryTypes.DIRICHLET, cosinusoidal)
+    charged_plate = create_charged_plate([40, 0], [60, 50], -20, BoundaryTypes.DIRICHLET, BoundaryParticleInteraction.DESTROY)
 
-    charged_plate = create_charged_plate([50, 50], [55, 55], 1, BoundaryTypes.DIRICHLET)
+    bcs = [left_bc, right_bc, upper_bc, lower_bc, charged_plate]
 
-    bcs = [left_bc, right_bc, upper_bc, lower_bc]
-
-    left_boundary_interaction = BoundaryParticleInteraction.REFLECTIVE
-    right_boundary_interaction = BoundaryParticleInteraction.REFLECTIVE
-    upper_boundary_interaction = BoundaryParticleInteraction.REFLECTIVE
-    lower_boundary_interaction = BoundaryParticleInteraction.REFLECTIVE
-
-    return (particle_positions, particle_velocities, particle_charges, particle_masses, delta_t, eps_0,
-            num_x_nodes, num_y_nodes, x_length, y_length, bcs, particle_sources,
-            left_boundary_interaction, right_boundary_interaction, upper_boundary_interaction, lower_boundary_interaction)
+    return (delta_t, eps_0, num_x_nodes, num_y_nodes, x_length, y_length, bcs, particle_sources)
 
 
 def test_2():
@@ -134,11 +111,11 @@ def test_2():
     Te = 1  # electron temperature, eV
     Ti = 0.1  # ion velocity, eV
     v_drift = 7000  # ion injection velocity, m/s
-    phi_p = -5  # wall potential, V
+    phi_p = -5  # plate potential, V
 
     # Calc plasma parameters
     lD = np.sqrt(EPS_0*Te / (n0*QE))  # Debye length, m
-    vth = np.sqrt(2*QE*Ti/Mi)  # Thermal velocity of ions, eV
+    vth = np.sqrt(2*QE*Ti/MI)  # Thermal velocity of ions, eV
 
     # Sim domain
     nx = 16  # num x nodes
@@ -163,32 +140,32 @@ def test_2():
     spwt = npt/np_insert  # ratio of real particles per macroparticle
     mp_q = 1  # macroparticle charge
 
-    # Particle arrays
-    particle_positions = np.zeros((2, 0))
-    particle_velocities = np.zeros((2, 0))
-    particle_charges = np.zeros((1, 0))
-    particle_masses = np.zeros((1, 0))
-
     # Boundary conditions
     left_bc = create_uniform_edge_boundary(nx, ny, "LEFT", BoundaryTypes.NEUMANN, 0)
     right_bc = create_uniform_edge_boundary(nx, ny, "RIGHT", BoundaryTypes.NEUMANN, 0)
     upper_bc = create_uniform_edge_boundary(nx, ny, "UPPER", BoundaryTypes.NEUMANN, 0)
     lower_bc = create_uniform_edge_boundary(nx, ny, "LOWER", BoundaryTypes.DIRICHLET, 0)
+    charged_plate = create_charged_plate(lower_left, upper_right, -7, BoundaryTypes.DIRICHLET)
+
+    bcs = [left_bc, right_bc, upper_bc, lower_bc, charged_plate]
 
     left_boundary_interaction = BoundaryParticleInteraction.OPEN
     right_boundary_interaction = BoundaryParticleInteraction.OPEN
     upper_boundary_interaction = BoundaryParticleInteraction.OPEN
     lower_boundary_interaction = BoundaryParticleInteraction.REFLECTIVE
 
-    bcs = [left_bc, right_bc, upper_bc, lower_bc]
+    particle_sources = []
 
-    return (particle_positions, particle_velocities, particle_charges, particle_masses, dt, EPS_0,
+    return (dt, EPS_0,
             nx, ny, Lx, Ly, bcs, particle_sources,
             left_boundary_interaction, right_boundary_interaction, upper_boundary_interaction, lower_boundary_interaction)
 
 
 # CREATE PARTICLE SYSTEM
-particle_system = ParticleManager(*initialise_test())
+delta_t, eps_0, num_x_nodes, num_y_nodes, x_length, y_length, bcs, particle_sources = initialise_test()
+
+particle_system = ParticleManager(delta_t, eps_0, num_x_nodes, num_y_nodes, x_length, y_length,
+                                  boundary_conditions=bcs, particle_sources=particle_sources)
 particle_system_history = ParticleSystemHistory()
 energy_diagnostic = EnergyDiagnostic()
 
@@ -197,13 +174,13 @@ fig = plt.figure(figsize=(6, 8))
 
 ax1 = fig.add_subplot(211)
 ax1.set_title("Densities")
-densities = ax1.imshow(np.zeros((particle_system.num_x_nodes, particle_system.num_y_nodes)), vmin=-7, vmax=7,
+densities = ax1.imshow(np.zeros((particle_system.num_x_nodes, particle_system.num_y_nodes)), vmin=-5, vmax=5,
                        interpolation="bicubic", origin="lower",
                        extent=[0, particle_system.x_length, 0, particle_system.y_length])
 
 ax2 = fig.add_subplot(212)
 ax2.set_title("Potential")
-potentials = ax2.imshow(np.zeros((particle_system.num_x_nodes, particle_system.num_y_nodes)), vmin=-7, vmax=7,
+potentials = ax2.imshow(np.zeros((particle_system.num_x_nodes, particle_system.num_y_nodes)), vmin=-30, vmax=30,
                         interpolation="bicubic", origin="lower",
                         extent=[0, particle_system.x_length, 0, particle_system.y_length])
 

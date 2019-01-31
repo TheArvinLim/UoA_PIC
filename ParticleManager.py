@@ -1,6 +1,6 @@
 import numpy as np
 import time
-from BoundaryClasses import BoundaryParticleInteraction
+from BoundaryClasses import BoundaryLocations
 from PotentialSolver import PotentialSolver
 from Integrator import LeapfrogIntegrator
 
@@ -13,15 +13,14 @@ from Integrator import LeapfrogIntegrator
 
 class ParticleManager:
     """Handles all particle / grid operations. Main simulation class."""
-    def __init__(self, particle_positions, particle_velocities, particle_charges, particle_masses,
-                delta_t, eps_0,
-                num_x_nodes, num_y_nodes, x_length, y_length,
+    def __init__(self,
+                delta_t, eps_0, num_x_nodes, num_y_nodes, x_length, y_length,
+                particle_positions=np.array([[], []]),
+                particle_velocities=np.array([[], []]),
+                particle_charges=np.array([]),
+                particle_masses=np.array([]),
                 boundary_conditions=[],
                 particle_sources=[],
-                left_boundary_particle_interaction=BoundaryParticleInteraction.OPEN,
-                right_boundary_particle_interaction=BoundaryParticleInteraction.OPEN,
-                upper_boundary_particle_interaction=BoundaryParticleInteraction.OPEN,
-                lower_boundary_particle_interaction=BoundaryParticleInteraction.OPEN,
                 integration_method="LEAPFROG",
                 collision_scheme="NONE"):
         """
@@ -41,14 +40,9 @@ class ParticleManager:
         :param num_x_nodes: number of nodes in x direction
         :param num_y_nodes: number of nodes in y direction
 
-        :param boundary_conditions: list of BoundaryCondition objects
+        :param boundary_conditions: list of BoundaryCondition objects. Should set all 4 edges, plus any interior bcs.
 
         :param particle_sources: list of ParticleSource objects used to generate particle during simulation
-
-        :param left_boundary_particle_interaction: BoundaryParticleInteraction object corresponding with left boundary
-        :param right_boundary_particle_interaction: BoundaryParticleInteraction object corresponding with right boundary
-        :param upper_boundary_particle_interaction: BoundaryParticleInteraction object corresponding with upper boundary
-        :param lower_boundary_particle_interaction: BoundaryParticleInteraction object corresponding with lower boundary
 
         :param integration_method: type of integration method to use. Options:{LEAPFROG}
         :param collision_scheme: collision model. Options: {NONE, MONTE_CARLO}
@@ -78,13 +72,19 @@ class ParticleManager:
         self.x_length = x_length
         self.y_length = y_length
 
-        # store the boundary conditions
-        self.left_boundary_particle_interaction = left_boundary_particle_interaction
-        self.right_boundary_particle_interaction = right_boundary_particle_interaction
-        self.upper_boundary_particle_interaction = upper_boundary_particle_interaction
-        self.lower_boundary_particle_interaction = lower_boundary_particle_interaction
-
+        # set boundary conditions and boundary particle interactions
         self.boundary_conditions = boundary_conditions
+        bc_locations = []
+        for boundary_condition in boundary_conditions:
+            bc_locations.append(boundary_condition.location)
+        if BoundaryLocations.LEFT not in bc_locations:
+            raise ValueError("Left boundary particle interaction has not been specified.")
+        if BoundaryLocations.RIGHT not in bc_locations:
+            raise ValueError("Right boundary particle interaction has not been specified.")
+        if BoundaryLocations.UPPER not in bc_locations:
+            raise ValueError("Lower boundary particle interaction has not been specified.")
+        if BoundaryLocations.LOWER not in bc_locations:
+            raise ValueError("Upper boundary particle interaction has not been specified.")
 
         # the following arrays store current properties of the grid nodes
         self.grid_charge_densities = np.zeros((self.num_x_nodes, self.num_y_nodes))
@@ -174,38 +174,13 @@ class ParticleManager:
         """Checks if particles have left the system and applies the appropriate boundary condition."""
         particles_to_delete = []  # this list will store all particle indices that correspond to out of bounds particles
 
-        # masks to determine all particles that are outside the boundaries
-        right_mask = self.particle_positions[0] >= self.x_length
-        left_mask = self.particle_positions[0] < 0
-        upper_mask = self.particle_positions[1] >= self.y_length
-        lower_mask = self.particle_positions[1] < 0
+        # iterate across boundary conditions and apply their particle interactions
+        for boundary_condition in self.boundary_conditions:
+            self.particle_positions, self.particle_velocities, new_particles_to_delete = \
+                boundary_condition.apply_particle_interaction(self.particle_positions, self.particle_velocities,
+                                                              self.x_length, self.y_length, self.delta_x, self.delta_y)
 
-        # if OPEN then we append those particle indices to the list of particles to delete
-        # if REFLECTIVE then we reflect their position across the boundary axis back into the system, and we
-        # reverse the correct component of velocity.
-        if self.right_boundary_particle_interaction == BoundaryParticleInteraction.OPEN:
-            particles_to_delete = np.append(particles_to_delete, (np.arange(self.num_particles)[right_mask]))
-        elif self.right_boundary_particle_interaction == BoundaryParticleInteraction.REFLECTIVE:
-            self.particle_positions[0][right_mask] = self.x_length - (self.particle_positions[0][right_mask] - self.x_length)
-            self.particle_velocities[0][right_mask] = -self.particle_velocities[0][right_mask]
-
-        if self.left_boundary_particle_interaction == BoundaryParticleInteraction.OPEN:
-            particles_to_delete = np.append(particles_to_delete, (np.arange(self.num_particles)[left_mask]))
-        elif self.left_boundary_particle_interaction == BoundaryParticleInteraction.REFLECTIVE:
-            self.particle_positions[0][left_mask] = -self.particle_positions[0][left_mask]
-            self.particle_velocities[0][left_mask] = -self.particle_velocities[0][left_mask]
-
-        if self.upper_boundary_particle_interaction == BoundaryParticleInteraction.OPEN:
-            particles_to_delete = np.append(particles_to_delete, (np.arange(self.num_particles)[upper_mask]))
-        elif self.upper_boundary_particle_interaction == BoundaryParticleInteraction.REFLECTIVE:
-            self.particle_positions[1][upper_mask] = self.y_length - (self.particle_positions[1][upper_mask] - self.y_length)
-            self.particle_velocities[1][upper_mask] = -self.particle_velocities[1][upper_mask]
-
-        if self.lower_boundary_particle_interaction == BoundaryParticleInteraction.OPEN:
-            particles_to_delete = np.append(particles_to_delete, (np.arange(self.num_particles)[lower_mask]))
-        elif self.lower_boundary_particle_interaction == BoundaryParticleInteraction.REFLECTIVE:
-            self.particle_positions[1][lower_mask] = -self.particle_positions[1][lower_mask]
-            self.particle_velocities[1][lower_mask] = -self.particle_velocities[1][lower_mask]
+            particles_to_delete = np.append(particles_to_delete, new_particles_to_delete)
 
         # delete all particles that have left the system
         if len(particles_to_delete) > 0:
@@ -219,7 +194,6 @@ class ParticleManager:
         #     for particle_velocity in self.particle_velocities.T:
         #         particle_velocity_norm = np.linalg.norm(particle_velocity)
         #         #p_collide = 1 - np.exp(-particle_velocity_norm*self.dt/self.mean_free_path())
-
 
     def delete_particles(self, particles_to_delete):
         """
@@ -259,13 +233,13 @@ class ParticleManager:
 
         # add particles from sources
         for particle_source in self.particle_sources:
-            if (self.current_t_step*self.delta_t) % (1/particle_source.frequency) == 0:
+            if not (self.current_t_step*self.delta_t) % (1/particle_source.frequency) == (self.current_t_step*(self.delta_t-1)) % (1/particle_source.frequency):
                 self.add_particles(particle_source)
 
         # update dynamic boundary conditions
         for boundary_condition in self.boundary_conditions:
             if boundary_condition.dynamic:
-                boundary_condition.update(self.current_t_step * self.dt)
+                boundary_condition.update(self.current_t_step * self.delta_t)
 
         self.solve_particle_forces()
 
