@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from ParticleTypes import*
 
 # TODO: Velocity histogram
 # TODO: Export simulation data to file
@@ -52,16 +53,45 @@ class EnergyDiagnostic:
 
 class ParticleSystemHistory:
     # data structures for saving snapshots
-    def __init__(self):
+    def __init__(self, particle_system):
+        self.particle_system = particle_system
         self.simulation_time_history = []
         self.grid_potentials_history = []
         self.grid_charge_densities_history = []
         self.particle_positions_history = []
         self.grid_E_history = []
+        self.particle_types_history = []
 
-    def take_snapshot(self, particle_system):
-        self.simulation_time_history.append(particle_system.simulation_time)
-        self.grid_potentials_history.append(particle_system.grid_potentials)
-        self.grid_charge_densities_history.append(particle_system.grid_charge_densities)
-        self.particle_positions_history.append(particle_system.particle_positions)
-        self.grid_E_history.append(particle_system.grid_E)
+    def take_snapshot(self):
+        self.simulation_time_history.append(self.particle_system.simulation_time)
+        self.grid_potentials_history.append(self.particle_system.grid_potentials)
+        self.grid_charge_densities_history.append(self.particle_system.grid_charge_densities)
+        self.particle_positions_history.append(self.particle_system.particle_positions)
+        self.grid_E_history.append(self.particle_system.grid_E)
+        self.particle_types_history.append(self.particle_system.particle_types)
+
+    def plot_average_potential(self):
+        avr_grid_potential = np.zeros(np.shape(self.grid_potentials_history[0]))
+        for i in self.grid_potentials_history:
+            avr_grid_potential += i
+        avr_grid_potential /= len(self.grid_potentials_history)
+
+        plt.imshow(avr_grid_potential.T,
+               vmin=np.min(avr_grid_potential),
+               vmax=np.max(avr_grid_potential),
+               interpolation="bicubic", origin="lower",
+               extent=[0, self.particle_system.x_length, 0, self.particle_system.y_length])
+        plt.title("Averaged potential")
+        plt.show()
+
+        plt.plot(np.mean(avr_grid_potential.T, axis=0))
+        plt.title("Averaged potential")
+        plt.show()
+
+    def plot_particle_number(self):
+        electron_count_history = [np.sum(particle_types == ParticleTypes.ELECTRON) for particle_types in self.particle_types_history]
+        argon_ion_count_history = [np.sum(particle_types == ParticleTypes.ARGON_ION) for particle_types in self.particle_types_history]
+
+        plt.plot(electron_count_history, label='Electrons')
+        plt.plot(argon_ion_count_history, label='Ions')
+        plt.show()

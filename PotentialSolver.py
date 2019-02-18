@@ -18,6 +18,7 @@ class PotentialSolver:
         :param boundary_conditions: list of BoundaryCondition objects
         """
         # TODO: Add iterative solver because direct solving via LU decomposition requires an excess of memory
+        # TODO: Not solving potential correctly for surface charges
 
         self.boundary_conditions = boundary_conditions
         self.eps_0 = eps_0

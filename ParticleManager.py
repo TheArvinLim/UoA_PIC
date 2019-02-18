@@ -10,6 +10,8 @@ from Integrator import LeapfrogIntegrator
 # TODO: Implement electromagnetic effects (in the low-temp, high-pressure, rf-driven discharge limit, magnetic effects
 #  are negligible)
 # TODO: Normalise units to delta_x = 1, delta_t = 1
+# TODO: Electron ion subcycling (different dt for species)
+# TODO: Model neutrals as having a Maxwellian velocity distribution and a uniform density within the boundaries
 
 class ParticleManager:
     """Handles all particle / grid operations. Main simulation class."""
@@ -19,8 +21,10 @@ class ParticleManager:
                 particle_velocities=np.array([[], []]),
                 particle_charges=np.array([]),
                 particle_masses=np.array([]),
+                particle_types=np.array([]),
                 boundary_conditions=[],
                 particle_sources=[],
+                replace_lost_particles=False,
                 integration_method="LEAPFROG",
                 collision_scheme="NONE"):
         """
@@ -52,6 +56,8 @@ class ParticleManager:
 
         self.dimensions = 2  # This is a 2D PIC simulation, must remain 2 for now.
 
+        self.replace_lost_particles = replace_lost_particles  # whether to replace lost particles with new ones
+
         self.delta_t = delta_t
         self.current_t_step = 0  # keeps track of how many timesteps in we are
 
@@ -64,6 +70,7 @@ class ParticleManager:
         self.particle_charges = particle_charges
         self.particle_E = np.zeros((self.dimensions, self.num_particles))
         self.particle_forces = np.zeros((self.dimensions, self.num_particles))
+        self.particle_types = particle_types
 
         # the following arrays store grid parameters
         self.num_x_nodes = num_x_nodes
@@ -141,6 +148,10 @@ class ParticleManager:
         np.add.at(self.grid_charge_densities, (floored_positions[0]+1, floored_positions[1]+1),
                   w4 * self.particle_charges)
 
+        # add boundary charges
+        for boundary in self.boundary_conditions:
+            self.grid_charge_densities[boundary.positions[0], boundary.positions[1]] += boundary.node_charges
+
         self.grid_charge_densities /= (self.delta_x * self.delta_y)  # divide by the cell volume to get density
 
         # Updates the potentials on the grid based on charge densities
@@ -171,22 +182,6 @@ class ParticleManager:
         # F = Eq
         self.particle_forces = self.particle_E * self.particle_charges
 
-    def apply_boundary_conditions(self):
-        """Checks if particles have left the system and applies the appropriate boundary condition."""
-        particles_to_delete = []  # this list will store all particle indices that correspond to out of bounds particles
-
-        # iterate across boundary conditions and apply their particle interactions
-        for boundary_condition in self.boundary_conditions:
-            self.particle_positions, self.particle_velocities, new_particles_to_delete = \
-                boundary_condition.apply_particle_interaction(self.particle_positions, self.particle_velocities,
-                                                              self.x_length, self.y_length, self.delta_x, self.delta_y)
-
-            particles_to_delete = np.append(particles_to_delete, new_particles_to_delete)
-
-        # delete all particles that have left the system
-        if len(particles_to_delete) > 0:
-            self.delete_particles(particles_to_delete)
-
     def resolve_collisions(self):
         # TODO: Implement Monte Carlo scheme
         pass
@@ -203,27 +198,44 @@ class ParticleManager:
         """
         # there is a possibility that duplicate indices are passed into this function, we only delete the unique
         # indices.
-        particles_to_delete = np.unique(particles_to_delete)
+        particles_to_delete = np.unique(particles_to_delete).astype(int)
+
+        if self.replace_lost_particles:
+            masses = self.particle_masses[particles_to_delete]
+            charges = self.particle_charges[particles_to_delete]
+            types = self.particle_types[particles_to_delete]
 
         self.particle_positions = np.delete(self.particle_positions, particles_to_delete, 1)
         self.particle_velocities = np.delete(self.particle_velocities, particles_to_delete, 1)
         self.particle_masses = np.delete(self.particle_masses, particles_to_delete)
         self.particle_charges = np.delete(self.particle_charges, particles_to_delete)
+        self.particle_types = np.delete(self.particle_types, particles_to_delete)
         self.particle_forces = np.delete(self.particle_forces, particles_to_delete, 1)
         self.particle_E = np.delete(self.particle_E, particles_to_delete, 1)
+
         self.num_particles = len(self.particle_masses)
 
-    def add_particles(self, particle_source):
+        if self.replace_lost_particles:
+            positions = np.random.rand(2, len(particles_to_delete)) * [[self.x_length], [self.y_length]]
+            velocities = (np.random.rand(2, len(particles_to_delete)) - 0.5)
+            self.add_particles(positions, velocities, masses, charges, types)
+
+    def add_particles(self, positions, velocities, masses, charges, types):
         """
         Adds particles to the system
-        :param particle_source: ParticleSource object
+        :param positions: array of positions to add particles to
+        :param velocities: array of new particle positions
+        :param masses: array of new particle masses
+        :param charges: array of new particle charges
+        :param types: array of new particle types
         """
-        num_new_particles = particle_source.generate_particle_positions().shape[1]
+        num_new_particles = positions.shape[1]
 
-        self.particle_positions = np.append(self.particle_positions, particle_source.generate_particle_positions(), 1)
-        self.particle_velocities = np.append(self.particle_velocities, particle_source.generate_particle_velocities(), 1)
-        self.particle_masses = np.append(self.particle_masses, particle_source.particle_masses)
-        self.particle_charges = np.append(self.particle_charges, particle_source.particle_charges)
+        self.particle_positions = np.append(self.particle_positions, positions, 1)
+        self.particle_velocities = np.append(self.particle_velocities, velocities, 1)
+        self.particle_masses = np.append(self.particle_masses, masses)
+        self.particle_charges = np.append(self.particle_charges, charges)
+        self.particle_types = np.append(self.particle_types, types)
         self.particle_forces = np.append(self.particle_forces, np.zeros((2, num_new_particles)), 1)
         self.particle_E = np.append(self.particle_E, np.zeros((2, num_new_particles)), 1)
 
@@ -234,14 +246,11 @@ class ParticleManager:
 
         # add particles from sources
         for particle_source in self.particle_sources:
-            period = 1/particle_source.frequency
-            if np.floor(self.simulation_time / period) > np.floor((self.simulation_time - self.delta_t) / period):
-                self.add_particles(particle_source)
+            particle_source.add_particles(self)
 
         # update dynamic boundary conditions
         for boundary_condition in self.boundary_conditions:
-            if boundary_condition.dynamic:
-                boundary_condition.update(self.current_t_step * self.delta_t)
+            boundary_condition.update(self.current_t_step * self.delta_t)
 
         self.solve_particle_forces()
 
@@ -251,7 +260,8 @@ class ParticleManager:
                                                                                       self.particle_forces,
                                                                                       self.particle_masses, self.delta_t)
 
-        self.apply_boundary_conditions()
+        for boundary_condition in self.boundary_conditions:
+            boundary_condition.apply_particle_interaction(self)
 
         self.resolve_collisions()
 
