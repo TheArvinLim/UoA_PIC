@@ -2,7 +2,7 @@ import numpy as np
 from enum import Enum
 
 
-class BoundaryTypes(Enum):
+class FieldBoundaryCondition(Enum):
     """Stores all possible boundary condition types"""
     NEUMANN = 0  # sets value at boundary to constant
     DIRICHLET = 1  # sets derivative at boundary to constant
@@ -13,7 +13,6 @@ class BoundaryParticleInteraction(Enum):
     """Stores all possible actions to perform on a particle that collides with a boundary"""
     DESTROY = 0  # destroys the particle
     REFLECT = 1  # reflects the particle
-    PASSTHROUGH = 2
 
 
 class BoundaryLocations(Enum):
@@ -60,14 +59,14 @@ class BoundaryCondition:
         self.calc_node_charges()
 
         # check for direction of the neumann boundary
-        if self.type == BoundaryTypes.NEUMANN:
+        if self.type == FieldBoundaryCondition.NEUMANN:
             if neumann_direction is None:
                 raise ValueError('Please specify direction of Neumann boundary condition')
             elif not (neumann_direction == 0 or neumann_direction == 1):
                 raise ValueError('Please specify Neumann boundary condition as either in '
                                  'x direction (0) or y direction (1)')
-            else:
-                self.neumann_direction = neumann_direction
+
+        self.neumann_direction = neumann_direction
 
         # check whether the magnitude is a function of time, or just static
         if callable(magnitude_function):
@@ -128,8 +127,8 @@ class BoundaryCondition:
                 particle_system.particle_positions[1][upper_mask] = particle_system.y_length - (particle_system.particle_positions[1][upper_mask] - particle_system.y_length)
                 particle_system.particle_velocities[1][upper_mask] = -particle_system.particle_velocities[1][upper_mask]
 
-                if self.collect_charge:
-                    self.charge += np.sum(particle_system.particle_charges[upper_mask])
+            if self.collect_charge:
+                self.charge += np.sum(particle_system.particle_charges[upper_mask])
 
         elif self.location == BoundaryLocations.LOWER:
             lower_mask = particle_system.particle_positions[1] < 0
@@ -139,8 +138,8 @@ class BoundaryCondition:
                 particle_system.particle_positions[1][lower_mask] = -particle_system.particle_positions[1][lower_mask]
                 particle_system.particle_velocities[1][lower_mask] = -particle_system.particle_velocities[1][lower_mask]
 
-                if self.collect_charge:
-                    self.charge += np.sum(particle_system.particle_charges[lower_mask])
+            if self.collect_charge:
+                self.charge += np.sum(particle_system.particle_charges[lower_mask])
 
         elif self.location == BoundaryLocations.INTERIOR:
             interior_mask = (particle_system.particle_positions[0] >= self.left_node_x*particle_system.delta_x) & \
@@ -195,8 +194,7 @@ class LeftBoundary(BoundaryCondition):
         xs = np.zeros(num_y_nodes)
         ys = np.arange(num_y_nodes)
         location = BoundaryLocations.LEFT
-        if bc_type == BoundaryTypes.NEUMANN:
-            neumann_direction = 0
+        neumann_direction = 0
 
         super().__init__(bc_type, np.array([xs.astype(int), ys.astype(int)]), value, location,
                          neumann_direction=neumann_direction, particle_interaction=interaction,
@@ -209,8 +207,7 @@ class RightBoundary(BoundaryCondition):
         xs = np.zeros(num_y_nodes) + num_x_nodes - 1
         ys = np.arange(num_y_nodes)
         location = BoundaryLocations.RIGHT
-        if bc_type == BoundaryTypes.NEUMANN:
-            neumann_direction = 0
+        neumann_direction = 0
 
         super().__init__(bc_type, np.array([xs.astype(int), ys.astype(int)]), value, location,
                          neumann_direction=neumann_direction, particle_interaction=interaction,
@@ -223,8 +220,7 @@ class UpperBoundary(BoundaryCondition):
         xs = np.arange(num_x_nodes)
         ys = np.zeros(num_x_nodes) + num_y_nodes - 1
         location = BoundaryLocations.UPPER
-        if bc_type == BoundaryTypes.NEUMANN:
-            neumann_direction = 1
+        neumann_direction = 1
 
         super().__init__(bc_type, np.array([xs.astype(int), ys.astype(int)]), value, location,
                          neumann_direction=neumann_direction, particle_interaction=interaction,
@@ -237,8 +233,7 @@ class LowerBoundary(BoundaryCondition):
         xs = np.arange(num_x_nodes)
         ys = np.zeros(num_x_nodes)
         location = BoundaryLocations.LOWER
-        if bc_type == BoundaryTypes.NEUMANN:
-            neumann_direction = 1
+        neumann_direction = 1
 
         super().__init__(bc_type, np.array([xs.astype(int), ys.astype(int)]), value, location,
                          neumann_direction=neumann_direction, particle_interaction=interaction,

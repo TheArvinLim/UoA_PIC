@@ -13,6 +13,7 @@ from Integrator import LeapfrogIntegrator
 # TODO: Electron ion subcycling (different dt for species)
 # TODO: Model neutrals as having a Maxwellian velocity distribution and a uniform density within the boundaries
 
+
 class ParticleManager:
     """Handles all particle / grid operations. Main simulation class."""
     def __init__(self,

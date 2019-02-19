@@ -1,5 +1,5 @@
 import numpy as np
-from BoundaryClasses import BoundaryCondition, BoundaryParticleInteraction, BoundaryTypes, BoundaryLocations
+from BoundaryClasses import BoundaryCondition, BoundaryParticleInteraction, FieldBoundaryCondition, BoundaryLocations
 
 # FUNCTIONS FOR TESTING DYNAMIC BOUNDARY CONDITIONS
 def sinusoidal(amplitude, period, phase, t):
@@ -24,20 +24,4 @@ def uniform_side_flux(side, x_length, y_length, delta_x, delta_y, v_drift, delta
     return position
 
 
-def sample_maxwell_boltzmann_velocity_distribution(v_thermal, M):
-    # TODO: Is this right?
-    a = 0
-    for i in range(M):
-        a += np.random.rand()
-    velocity = np.sqrt(M/12) * (a - M/2) * v_thermal
 
-    return velocity
-
-
-def new_velocity(v_drift, v_thermal, M):
-    x_vel = sample_maxwell_boltzmann_velocity_distribution(v_thermal, M)
-    y_vel = sample_maxwell_boltzmann_velocity_distribution(v_thermal, M)
-
-    velocity = np.array([[x_vel], [y_vel]]) + v_drift
-
-    return velocity
