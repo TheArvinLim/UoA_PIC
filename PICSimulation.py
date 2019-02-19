@@ -32,6 +32,15 @@ def new_velocity(v_drift, v_thermal, M):
     return velocity
 
 
+def generate_new_velocities(v_drift, v_thermal, M, num_particles):
+    """Generates an array of new velocities from maxwell boltzmann dist."""
+    velocities = np.zeros((2, num_particles))
+    for i in range(num_particles):
+        velocities[:, i] = new_velocity(v_drift, v_thermal, M).T
+
+    return velocities
+
+
 def thermal_velocity(charge, temperature, mass):
     return np.sqrt(2*charge*temperature/mass)
 
@@ -164,18 +173,18 @@ class BoxDebyeSheathExample(PICSimulation):
         electron_vth = thermal_velocity(Electron().charge, electron_temp, Electron().mass)
         ion_vth = thermal_velocity(ArgonIon().charge, ion_temp, ArgonIon().mass)
 
-        num_particles = int(2*neutral_density*x_length*y_length/sp_w)
+        num_particles = int(neutral_density*x_length*y_length/sp_w)
         printout_interval = 500  # timesteps between printouts
         snapshot_interval = 10  # timesteps between snapshots
 
         particle_positions = np.random.rand(2, num_particles) * [[x_length], [y_length]]
-        particle_velocities = (np.random.rand(2, num_particles) - 0.5)
-        particle_charges = np.append(np.zeros(int(num_particles / 2)) + ArgonIon().charge * sp_w,
-                                     np.zeros(int(num_particles / 2)) + Electron().charge * sp_w)
-        particle_masses = np.append(np.zeros(int(num_particles / 2)) + ArgonIon().mass * sp_w,
-                                    np.zeros(int(num_particles / 2)) + Electron().mass * sp_w)
-        particle_types = np.append([ArgonIon().type] * int(num_particles / 2),
-                                   [Electron().type] * int(num_particles / 2))
+        particle_velocities = np.append(generate_new_velocities(0, ion_vth, 3, num_particles), generate_new_velocities(0, electron_vth, 3, num_particles))
+        particle_charges = np.append(np.zeros(num_particles) + ArgonIon().charge * sp_w,
+                                     np.zeros(num_particles) + Electron().charge * sp_w)
+        particle_masses = np.append(np.zeros(num_particles) + ArgonIon().mass * sp_w,
+                                    np.zeros(num_particles) + Electron().mass * sp_w)
+        particle_types = np.append([ArgonIon().type] * num_particles,
+                                   [Electron().type] * num_particles)
 
         left_bc = LeftBoundary(num_x_nodes, num_y_nodes, FieldBoundaryCondition.FLOATING, 0,
                                BoundaryParticleInteraction.DESTROY, collect_charge=True)
@@ -204,8 +213,10 @@ x_length = 0.015
 y_length = 0.001
 sp_w = 10000
 neutral_density = 1e12
+electron_temp = 1
+ion_temp = 1
 
-sim = BoxDebyeSheathExample(delta_t, num_time_steps, num_x_nodes, num_y_nodes, x_length, y_length, sp_w, neutral_density)
+sim = BoxDebyeSheathExample(delta_t, num_time_steps, num_x_nodes, num_y_nodes, x_length, y_length, sp_w, neutral_density, electron_temp, ion_temp)
 
 sim.begin_simulation()
 sim.begin_animation()
