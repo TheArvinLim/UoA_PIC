@@ -1,6 +1,7 @@
 import numpy as np
 from PlasmaPhysicsFunctions import*
 
+
 class ParticleSource:
     """Parent class for all particle sources"""
     def __init__(self):
@@ -8,6 +9,7 @@ class ParticleSource:
 
     def add_particles(self):
         pass
+
 
 class StaticParticleEmitter(ParticleSource):
     def __init__(self, new_particle_positions, new_particle_velocities, new_particle_masses, new_particle_charges,

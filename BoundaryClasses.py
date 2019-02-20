@@ -170,7 +170,7 @@ class BoundaryCondition:
         self.node_charges[self.interior_col_mask] += charge_per_cell
         self.node_charges[self.interior_mask] += charge_per_cell
 
-#TODO: docstrings all below
+# TODO: docstrings all below
 
 class InteriorPlate(BoundaryCondition):
     def __init__(self, lower_left_corner, upper_right_corner, value, bc_type, interaction, collect_charge=False, neumann_direction=None):
