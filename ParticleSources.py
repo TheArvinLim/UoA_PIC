@@ -58,7 +58,8 @@ class MaintainChargeDensity(ParticleSource):
             ions_to_add = 0
 
         particle_positions = np.random.rand(2, electrons_to_add + ions_to_add) * \
-                             [[particle_system.x_length], [particle_system.y_length]]  # add somewhere random within system
+                             [[particle_system.x_length], [particle_system.y_length]]
+        # add somewhere random within system
 
         ion_velocities = sample_maxwell_boltzmann_velocity_distribution(self.ion_v_thermal, ions_to_add)
         electron_velocities = sample_maxwell_boltzmann_velocity_distribution(self.electron_v_thermal, electrons_to_add)

@@ -88,6 +88,8 @@ class PotentialSolver:
         self.A = scipy.sparse.csc_matrix(self.A)
         self.LU = scipy.sparse.linalg.splu(self.A)
 
+        print("Potential solver matrix created...")
+
     def solve_potentials(self, grid_charge_densities):
         """
         Solves the potentials at grid nodes

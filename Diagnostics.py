@@ -110,32 +110,59 @@ class SimulationDataAnalyser:
         plt.legend(loc='center right')
         plt.show()
 
+    def average_list_of_arrays(self, list_of_arrays):
+        avr = np.zeros(np.shape(list_of_arrays[0]))
+        for array in list_of_arrays:
+            avr += array
+        avr /= len(list_of_arrays)
+
+        return avr
+
     def plot_average_potential(self):
-        avr_grid_potential = np.zeros(np.shape(self.grid_potentials_history[0]))
-        for i in self.grid_potentials_history:
-            avr_grid_potential += i
-        avr_grid_potential /= len(self.grid_potentials_history)
+        avr_grid_potential = self.average_list_of_arrays(self.grid_potentials_history)
 
         plt.imshow(avr_grid_potential.T,
                    vmin=np.min(avr_grid_potential),
                    vmax=np.max(avr_grid_potential),
                    interpolation="bicubic", origin="lower",
                    extent=[0, self.x_length, 0, self.y_length])
-        plt.title("Averaged potential")
+        plt.title("Averaged System Potential")
         plt.show()
 
-        plt.plot(np.mean(avr_grid_potential.T, axis=0))
+        positions = np.arange(0, self.num_x_nodes) * self.delta_x
+
+        np.savetxt('average_potential.csv', [positions, np.mean(avr_grid_potential.T, axis=0)], delimiter=",")
+
+        plt.plot(positions, np.mean(avr_grid_potential.T, axis=0))
         plt.title("Averaged potential along x")
         plt.show()
 
     def plot_average_charge_density(self):
-        avr_grid_charge_density = np.zeros(np.shape(self.grid_charge_densities_history[0]))
-        for i in self.grid_charge_densities_history:
-            avr_grid_charge_density += i
-            avr_grid_charge_density /= len(self.grid_charge_densities_history)
+        avr_grid_charge_density = self.average_list_of_arrays(self.grid_charge_densities_history)
 
-        plt.plot(np.mean(avr_grid_charge_density.T, axis=0))
+        positions = np.arange(0, self.num_x_nodes) * self.delta_x
+
+        plt.plot(positions, np.mean(avr_grid_charge_density.T, axis=0))
         plt.title("Averaged charge density along x")
+        plt.show()
+
+    def plot_average_particle_type_density(self, particle_types):
+        for particle_type in particle_types:
+            avr_density = np.zeros(self.num_x_nodes)
+            for i, particle_positions in enumerate(self.particle_positions_history):
+                # animate density along x
+                x_positions = particle_positions.T[self.particle_types_history[i] == particle_type].T[0]
+                node_positions = np.round(x_positions / self.delta_x).astype(int)
+                binned_positions = np.bincount(node_positions, minlength=self.num_x_nodes)
+                density = binned_positions / self.delta_x
+                avr_density += density
+
+            avr_density /= len(self.particle_positions_history)
+            positions = np.arange(0, self.num_x_nodes) * self.delta_x
+
+            plt.plot(positions, avr_density, 'o')
+
+        plt.title("Averaged density along x")
         plt.show()
 
     def plot_particle_number(self):
@@ -150,10 +177,8 @@ class SimulationDataAnalyser:
 
     def animate_history(self, i):
         # animate particles
-        electron_positions = self.particle_positions_history[i].T[
-            self.particle_types_history[i] == ParticleTypes.ELECTRON].T
-        ion_positions = self.particle_positions_history[i].T[
-            self.particle_types_history[i] == ParticleTypes.ARGON_ION].T
+        electron_positions = self.particle_positions_history[i].T[self.particle_types_history[i] == ParticleTypes.ELECTRON].T
+        ion_positions = self.particle_positions_history[i].T[self.particle_types_history[i] == ParticleTypes.ARGON_ION].T
         self.electrons.set_data(electron_positions)
         self.ions.set_data(ion_positions)
 

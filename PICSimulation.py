@@ -51,7 +51,8 @@ class PICSimulation:
             "integration_method": integration_method,
             "collision_scheme": collision_scheme,
             "boundary_conditions": [boundary_condition.__class__.__name__ for boundary_condition in boundary_conditions],
-            "particle_sources": [particle_source.__class__.__name__ for particle_source in particle_sources]
+            "particle_sources": [particle_source.__class__.__name__ for particle_source in particle_sources],
+            "initial_num_particles": [self.particle_system.num_particles]
         }
 
     def initiate_simulation(self, num_time_steps, printout_interval, snapshot_interval, save_filename):
@@ -119,7 +120,7 @@ class BoxDebyeSheathExample(PICSimulation):
 
         delta_x = x_length / (num_x_nodes - 1)
         delta_y = y_length / (num_y_nodes - 1)
-        delta_t = np.min([delta_x, delta_y]) / electron_vth / 5  # ensure particles only cross 20% of cell width per dt
+        delta_t = np.min([delta_x, delta_y]) / electron_vth / 10  # ensure particles only cross 10% of cell width per dt
 
         particle_positions = np.random.rand(2, num_particles*2) * [[x_length], [y_length]]
 
@@ -164,27 +165,30 @@ class BoxDebyeSheathExample(PICSimulation):
         self.simulation_parameters['ion_vth'] = ion_vth
 
 
-x_length = 0.15
-y_length = 0.01
-num_x_nodes = 150
-num_y_nodes = 10
+x_length = 0.030
+y_length = 0.005
+num_x_nodes = 30
+num_y_nodes = 5
 
-sp_w = 100000
+sp_w = 10000
 neutral_density = 1e12
 electron_temp = 1
 ion_temp = 0.1
 
-num_time_steps = 5000
+num_time_steps = 20000
 printout_interval = num_time_steps/20
 snapshot_interval = 10
-save_filename = 'debye_sheath'
+save_filename = 'test'
 
-sim = BoxDebyeSheathExample(x_length, y_length, sp_w, neutral_density, electron_temp, ion_temp, num_x_nodes, num_y_nodes)
-sim.initiate_simulation(num_time_steps, printout_interval, snapshot_interval, save_filename)
-del sim
+# sim = BoxDebyeSheathExample(x_length, y_length, sp_w, neutral_density, electron_temp, ion_temp, num_x_nodes, num_y_nodes)
+# sim.initiate_simulation(num_time_steps, printout_interval, snapshot_interval, save_filename)
+# del sim
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
 dest_dir = os.path.join(script_dir, save_filename, save_filename)
 simulation_data_analyser = SimulationDataAnalyser(dest_dir)
-simulation_data_analyser.begin_animation()
+
+# simulation_data_analyser.begin_animation()
+# simulation_data_analyser.plot_average_particle_type_density([ParticleTypes.ELECTRON, ParticleTypes.ARGON_ION])
+# simulation_data_analyser.plot_average_charge_density()
 simulation_data_analyser.plot_average_potential()
