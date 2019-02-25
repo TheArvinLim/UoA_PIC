@@ -1,12 +1,14 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from PlasmaPhysicsFunctions import*
+from PlasmaPhysicsFunctions import ParticleTypes
 import numpy as np
-import matplotlib.colors as colours
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 import json
 import os
+import pickle
+import itertools
+
 # TODO: Velocity histogram
 # TODO: docstrings
 
@@ -37,53 +39,56 @@ class SimulationHistorian:
         self.particle_types_history.append(self.particle_system.particle_types)
         self.particle_masses_history.append(self.particle_system.particle_masses)
 
-    def save_results(self, filename, simulation_parameters=None):
+    def save_results(self, foldername, simulation_parameters=None):
         """Save simulation data"""
+        del self.particle_system
+
         script_dir = os.path.dirname(os.path.abspath(__file__))
-        dest_dir = os.path.join(script_dir, filename)
+        folder = os.path.join(script_dir, foldername)
+
         try:
-            os.makedirs(dest_dir)
+            os.makedirs(folder)
         except OSError:
             pass  # already exists
-        path = os.path.join(dest_dir, filename)
 
-        np.savez(path,
-                 num_x_nodes=self.particle_system.num_x_nodes,
-                 num_y_nodes=self.particle_system.num_y_nodes,
-                 delta_x=self.particle_system.delta_x,
-                 delta_y=self.particle_system.delta_y,
-                 x_length=self.particle_system.x_length,
-                 y_length=self.particle_system.y_length,
-                 simulation_time_history=self.simulation_time_history,
-                 grid_potentials_history=self.grid_potentials_history,
-                 grid_charge_densities_history=self.grid_charge_densities_history,
-                 particle_positions_history=self.particle_positions_history,
-                 particle_velocities_history=self.particle_velocities_history,
-                 particle_types_history=self.particle_types_history,
-                 particle_masses_history=self.particle_masses_history)
+        #TODO: doesnt work with changing number of particles
+        with open(os.path.join(folder, 'data.pkl'), 'wb') as file:
+            pickle.dump(self, file)
+        with open(os.path.join(folder, 'parameters.pkl'), 'wb') as file:
+            pickle.dump(simulation_parameters, file)
+        with open(os.path.join(folder, 'parameters.txt'), 'w') as file:
+            file.write(json.dumps(simulation_parameters))
 
-        with open(path + '.txt', 'w') as file:
-            file.write(json.dumps(simulation_parameters))  # use `json.loads` to do the reverse
+        print("Data successfully saved to folder", foldername)
 
-        print("Data successfully saved to", filename + '.npz')
 
 class SimulationDataAnalyser:
-    def __init__(self, filename):
-        simulation_data = np.load(filename + '.npz')
-        self.simulation_time_history = simulation_data['simulation_time_history']
-        self.grid_potentials_history = simulation_data['grid_potentials_history']
-        self.grid_charge_densities_history = simulation_data['grid_charge_densities_history']
-        self.particle_positions_history = simulation_data['particle_positions_history']
-        self.particle_velocities_history = simulation_data['particle_velocities_history']
-        self.particle_types_history = simulation_data['particle_types_history']
-        self.particle_masses_history = simulation_data['particle_masses_history']
+    def __init__(self, foldername):
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        self.folder = os.path.join(script_dir, foldername)
 
-        self.num_x_nodes = simulation_data['num_x_nodes']
-        self.num_y_nodes = simulation_data['num_y_nodes']
-        self.delta_x = simulation_data['delta_x']
-        self.delta_y = simulation_data['delta_y']
-        self.x_length = simulation_data['x_length']
-        self.y_length = simulation_data['y_length']
+        with open(os.path.join(self.folder, 'data.pkl'), 'rb') as file:
+            data = pickle.load(file)
+            self.simulation_time_history = data.simulation_time_history
+
+            self.grid_potentials_history = data.grid_potentials_history
+            self.grid_charge_densities_history = data.grid_charge_densities_history
+
+            self.particle_positions_history = data.particle_positions_history
+            self.particle_velocities_history = data.particle_velocities_history
+            self.particle_types_history = data.particle_types_history
+            self.particle_masses_history = data.particle_masses_history
+
+        with open(os.path.join(self.folder, 'parameters.pkl'), 'rb') as file:
+            parameters = pickle.load(file)
+            self.num_x_nodes = parameters['num_x_nodes']
+            self.num_y_nodes = parameters['num_y_nodes']
+            self.delta_x = parameters['delta_x']
+            self.delta_y = parameters['delta_y']
+            self.x_length = parameters['x_length']
+            self.y_length = parameters['y_length']
+
+        self.num_time_steps = len(self.simulation_time_history)
 
     def plot_energy_history(self):
         """Calculates and plots stored energy histories"""
@@ -91,7 +96,7 @@ class SimulationDataAnalyser:
         energy_kinetic_history = []
         energy_total_history = []
 
-        for i in range(len(self.particle_positions_history)):
+        for i in range(self.num_time_steps):
             total_potential = np.sum(1 / 2 * self.grid_potentials_history[i] * self.grid_charge_densities_history[i] *
                                      self.delta_x * self.delta_y)
 
@@ -104,10 +109,14 @@ class SimulationDataAnalyser:
             energy_kinetic_history = energy_kinetic_history + [total_kinetic]
             energy_total_history = energy_total_history + [total_energy]
 
-        plt.plot(energy_potential_history, label='potential')
-        plt.plot(energy_kinetic_history, label='kinetic')
-        plt.plot(energy_total_history, label='total')
-        plt.legend(loc='center right')
+        plt.plot(self.simulation_time_history, energy_potential_history, label='potential')
+        plt.plot(self.simulation_time_history, energy_kinetic_history, label='kinetic')
+        plt.plot(self.simulation_time_history, energy_total_history, label='total')
+        plt.legend(loc='lower right')
+        plt.xlabel('Time (s)')
+        plt.ylabel('Energy (J)')
+        plt.title('Energy over time')
+        plt.ticklabel_format(axis='both', style='sci', scilimits=(0, 0))
         plt.show()
 
     def average_list_of_arrays(self, list_of_arrays):
@@ -121,20 +130,36 @@ class SimulationDataAnalyser:
     def plot_average_potential(self):
         avr_grid_potential = self.average_list_of_arrays(self.grid_potentials_history)
 
-        plt.imshow(avr_grid_potential.T,
-                   vmin=np.min(avr_grid_potential),
-                   vmax=np.max(avr_grid_potential),
-                   interpolation="bicubic", origin="lower",
-                   extent=[0, self.x_length, 0, self.y_length])
-        plt.title("Averaged System Potential")
-        plt.show()
+        # plt.imshow(avr_grid_potential.T,
+        #            vmin=np.min(avr_grid_potential),
+        #            vmax=np.max(avr_grid_potential),
+        #            interpolation="bicubic", origin="lower",
+        #            extent=[0, self.x_length, 0, self.y_length])
+        # plt.title("Averaged System Potential")
+        # plt.show()
 
         positions = np.arange(0, self.num_x_nodes) * self.delta_x
 
-        np.savetxt('average_potential.csv', [positions, np.mean(avr_grid_potential.T, axis=0)], delimiter=",")
+        with open(os.path.join(self.folder, 'potentials.csv'), 'wb') as file:
+            np.savetxt(file, [positions, avr_grid_potential[:, int(self.num_y_nodes/2)]], delimiter=",")
 
-        plt.plot(positions, np.mean(avr_grid_potential.T, axis=0))
+        plt.plot(positions, avr_grid_potential[:, int(self.num_y_nodes/2)])
         plt.title("Averaged potential along x")
+        plt.show()
+
+    def plot_potential(self, timestep):
+        positions = np.arange(0, self.num_x_nodes) * self.delta_x
+
+        with open(os.path.join(self.folder, 'potentials.csv'), 'wb') as file:
+            np.savetxt(file, [positions, self.grid_potentials_history[timestep][:, int(self.num_y_nodes/2)]], delimiter=",")
+
+        plt.plot(positions, self.grid_potentials_history[timestep][:, int(self.num_y_nodes/2)])
+        plt.title("Averaged potential along x")
+        plt.show()
+
+    def plot_charge_density_at_point(self, node_x, node_y):
+        charge_density_history = [charge_densities[node_x, node_y] for charge_densities in self.grid_charge_densities_history]
+        plt.plot(self.simulation_time_history, charge_density_history)
         plt.show()
 
     def plot_average_charge_density(self):
@@ -142,37 +167,127 @@ class SimulationDataAnalyser:
 
         positions = np.arange(0, self.num_x_nodes) * self.delta_x
 
-        plt.plot(positions, np.mean(avr_grid_charge_density.T, axis=0))
+        with open(os.path.join(self.folder, 'densities.csv'), 'wb') as file:
+            np.savetxt(file, [positions, avr_grid_charge_density[:, int(self.num_y_nodes/2)]], delimiter=",")
+
+        plt.plot(positions, avr_grid_charge_density[:, int(self.num_y_nodes/2)])
         plt.title("Averaged charge density along x")
         plt.show()
 
-    def plot_average_particle_type_density(self, particle_types):
-        for particle_type in particle_types:
+    def plot_charge_density(self, timestep):
+        positions = np.arange(0, self.num_x_nodes) * self.delta_x
+
+        with open(os.path.join(self.folder, 'potentials.csv'), 'wb') as file:
+            np.savetxt(file, [positions, self.grid_charge_densities_history[timestep][:, int(self.num_y_nodes/2)]], delimiter=",")
+
+        plt.plot(positions, self.grid_charge_densities_history[timestep][:, int(self.num_y_nodes/2)])
+        plt.title("Averaged potential along x")
+        plt.show()
+
+    def plot_average_particle_type_density(self, particle_types_to_plot):
+        for particle_type_to_plot in particle_types_to_plot:
             avr_density = np.zeros(self.num_x_nodes)
             for i, particle_positions in enumerate(self.particle_positions_history):
                 # animate density along x
-                x_positions = particle_positions.T[self.particle_types_history[i] == particle_type].T[0]
-                node_positions = np.round(x_positions / self.delta_x).astype(int)
-                binned_positions = np.bincount(node_positions, minlength=self.num_x_nodes)
-                density = binned_positions / self.delta_x
+                x_positions = particle_positions[:, self.particle_types_history[i] == particle_type_to_plot][0].flatten()
+                cell_length_position = x_positions / self.delta_x
+                node_positions = np.floor(cell_length_position).astype(int)
+                fractional_positions = (cell_length_position - node_positions)
+                particle_densities = np.zeros(self.num_x_nodes)
+
+                np.add.at(particle_densities, node_positions+1, fractional_positions)
+                np.add.at(particle_densities, node_positions, 1-fractional_positions)
+                density = particle_densities / self.delta_x
+
                 avr_density += density
 
-            avr_density /= len(self.particle_positions_history)
+            avr_density /= self.num_time_steps
             positions = np.arange(0, self.num_x_nodes) * self.delta_x
 
-            plt.plot(positions, avr_density, 'o')
+            with open(os.path.join(self.folder, particle_type_to_plot.name + '.csv'), 'wb') as file:
+                np.savetxt(file, [positions, avr_density], delimiter=",")
 
-        plt.title("Averaged density along x")
+            plt.plot(positions, avr_density, 'o', label=particle_type_to_plot.name)
+
+        plt.title("Averaged particle density along x")
+        plt.legend()
         plt.show()
 
-    def plot_particle_number(self):
-        electron_count_history = [np.sum(particle_types == ParticleTypes.ELECTRON) for particle_types in
-                                  self.particle_types_history]
-        argon_ion_count_history = [np.sum(particle_types == ParticleTypes.ARGON_ION) for particle_types in
-                                   self.particle_types_history]
+    def plot_average_particle_speeds(self, particle_types_to_plot):
+        for particle_type_to_plot in particle_types_to_plot:
+            avr_speeds = np.zeros(self.num_x_nodes)
+            for i, particle_positions in enumerate(self.particle_positions_history):
+                # animate density along x
+                particle_speeds = self.particle_velocities_history[i][:, self.particle_types_history[i] == particle_type_to_plot][0].flatten()
+                x_positions = particle_positions[:, self.particle_types_history[i] == particle_type_to_plot][0].flatten()
+                cell_length_position = x_positions / self.delta_x
+                node_positions = np.round(cell_length_position).astype(int)
+                speeds = np.zeros(self.num_x_nodes)
 
-        plt.plot(electron_count_history, label='Electrons')
-        plt.plot(argon_ion_count_history, label='Ions')
+                bin = np.bincount(node_positions, minlength=self.num_x_nodes)
+
+                np.add.at(speeds, node_positions, particle_speeds)
+                speeds /= bin
+                avr_speeds += speeds
+
+            avr_speeds /= self.num_time_steps
+            positions = np.arange(0, self.num_x_nodes) * self.delta_x
+
+            with open(os.path.join(self.folder, 'particle_speeds.csv'), 'wb') as file:
+                np.savetxt(file, [positions, avr_speeds], delimiter=",")
+
+            plt.plot(positions, avr_speeds, 'o', label=particle_type_to_plot.name)
+
+        plt.title("Averaged particle x speed along x")
+        plt.legend()
+        plt.show()
+
+    def plot_particle_number(self, particle_types_to_plot):
+        for particle_type_to_plot in particle_types_to_plot:
+            count_history = [np.sum(particle_types == particle_type_to_plot) for particle_types in self.particle_types_history]
+            plt.plot(count_history, label=particle_type_to_plot.name)
+
+        plt.title("Particle type count over time")
+        plt.legend()
+        plt.show()
+
+    def plot_simulation_state(self, timestep):
+        fig = plt.figure(figsize=(6, 8))
+
+        ax3 = fig.add_subplot(311)
+        ax3.set_title("Positions")
+        ax3.set_xlim(0, self.x_length)
+        ax3.set_ylim(0, self.y_length)
+
+        electron_positions = self.particle_positions_history[timestep].T[
+            self.particle_types_history[timestep] == ParticleTypes.ELECTRON].T
+        ion_positions = self.particle_positions_history[timestep].T[
+            self.particle_types_history[timestep] == ParticleTypes.ARGON_ION].T
+
+        ions = ax3.plot(ion_positions[0], ion_positions[1], 'co', markersize=0.5, alpha=0.5)
+        electrons = ax3.plot(electron_positions[0], electron_positions[1], 'ro', markersize=0.5, alpha=0.5)
+
+        ax1 = fig.add_subplot(312)
+        ax1.set_title("Densities")
+        densities = ax1.imshow(np.zeros((self.num_x_nodes, self.num_y_nodes)),
+                                    vmin=np.min([np.min(i) for i in self.grid_charge_densities_history]),
+                                    vmax=np.max([np.max(i) for i in self.grid_charge_densities_history]),
+                                    interpolation="bicubic", origin="lower",
+                                    extent=[0, self.x_length, 0, self.y_length])
+        densities.set_data(self.grid_charge_densities_history[timestep].T)
+
+        ax2 = fig.add_subplot(313)
+        ax2.set_title("Potential")
+        potentials = ax2.imshow(np.zeros((self.num_x_nodes, self.num_y_nodes)),
+                                     vmin=np.min([np.min(i) for i in self.grid_potentials_history]),
+                                     vmax=np.max([np.max(i) for i in self.grid_potentials_history]),
+                                     interpolation="bicubic", origin="lower",
+                                     extent=[0, self.x_length, 0, self.y_length])
+        potentials.set_array(self.grid_potentials_history[timestep].T)
+
+        timetext = ax1.text(self.x_length / 8, self.y_length * 0.5, "0")
+        timetext.set_text(f'{self.simulation_time_history[timestep] * 1000000:<6.4f}µs')
+
         plt.show()
 
     def animate_history(self, i):
@@ -206,25 +321,25 @@ class SimulationDataAnalyser:
         ax1 = fig.add_subplot(312)
         ax1.set_title("Densities")
         self.densities = ax1.imshow(np.zeros((self.num_x_nodes, self.num_y_nodes)),
-                               vmin=np.min([np.min(i) for i in self.grid_charge_densities_history]),
-                               vmax=np.max([np.max(i) for i in self.grid_charge_densities_history]),
-                               interpolation="bicubic", origin="lower",
-                               extent=[0, self.x_length, 0, self.y_length])
+                                    vmin=np.min([np.min(i) for i in self.grid_charge_densities_history]),
+                                    vmax=np.max([np.max(i) for i in self.grid_charge_densities_history]),
+                                    interpolation="bicubic", origin="lower",
+                                    extent=[0, self.x_length, 0, self.y_length])
 
         ax2 = fig.add_subplot(313)
         ax2.set_title("Potential")
         self.potentials = ax2.imshow(np.zeros((self.num_x_nodes, self.num_y_nodes)),
-                                vmin=np.min([np.min(i) for i in self.grid_potentials_history]),
-                                vmax=np.max([np.max(i) for i in self.grid_potentials_history]),
-                                interpolation="bicubic", origin="lower",
-                                extent=[0, self.x_length, 0, self.y_length])
+                                     vmin=np.min([np.min(i) for i in self.grid_potentials_history]),
+                                     vmax=np.max([np.max(i) for i in self.grid_potentials_history]),
+                                     interpolation="bicubic", origin="lower",
+                                     extent=[0, self.x_length, 0, self.y_length])
 
         self.timetext = ax1.text(self.x_length / 8, self.y_length * 0.5, "0")
 
         self.animation_object = animation.FuncAnimation(fig, self.animate_history,
-                                                   frames=len(self.grid_potentials_history),
-                                                   save_count=len(self.grid_potentials_history),
-                                                   interval=1, blit=True)
+                                                        frames=self.num_time_steps,
+                                                        save_count=self.num_time_steps,
+                                                        interval=1, blit=True)
         plt.show()
 
 
